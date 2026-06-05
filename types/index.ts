@@ -69,7 +69,7 @@ export interface Job {
   id: string;
   run_id: string | null;
   user_id: string;
-  source: "linkedin" | "url";
+  source: "search" | "url";
   source_url: string | null;
   external_apply_url: string | null;
   title: string | null;
@@ -91,7 +91,20 @@ export interface Job {
   tailored_resume_url: string | null;
   tailored_match_score: number | null;
   is_tailored: boolean;
+  company_research: CompanyResearchDossier | null;
   found_at: string;
+}
+
+export interface CompanyResearchDossier {
+  companyOverview: string;
+  techStack: string[];
+  culture: string[];
+  whyThisRole: string;
+  yourEdge: string[];
+  gapsToAddress: string[];
+  smartQuestions: string[];
+  interviewPrep: string[];
+  sources: string[];
 }
 
 export interface AgentLog {

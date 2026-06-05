@@ -111,7 +111,7 @@ const { data, error } = await insforge
 // Update
 const { error } = await insforge
   .from("jobs")
-  .update({ is_tailored: true, tailored_match_score: score })
+  .update({ company_research: dossier })
   .eq("id", jobId)
   .eq("user_id", user.id); // always scope to user
 ```
@@ -146,40 +146,111 @@ const url = data.publicUrl;
 **Storage paths:**
 
 - Base resume: `resumes/{user_id}/resume.pdf`
-- Tailored resume: `resumes/{user_id}/{job_id}-tailored.pdf`
-
-**Delete before re-upload (tailored resume only):**
-
-```typescript
-// Before uploading a new tailored PDF — delete old one if exists
-const { data: job } = await insforge
-  .from("jobs")
-  .select("tailored_resume_url")
-  .eq("id", jobId)
-  .single();
-
-if (job?.tailored_resume_url) {
-  const oldPath = `${userId}/${jobId}-tailored.pdf`;
-  await insforge.storage.from("resumes").remove([oldPath]);
-}
-
-// Now upload the new tailored PDF
-await insforge.storage
-  .from("resumes")
-  .upload(`${userId}/${jobId}-tailored.pdf`, buffer, {
-    contentType: "application/pdf",
-    upsert: false, // file was deleted — fresh upload
-  });
-```
 
 **Rules:**
 
 - Always use `upsert: true` for base resume uploads — overwrites existing file
-- For tailored resumes — delete old file first, then upload with `upsert: false`
 - Always save the public URL back to the DB after upload
 - Never write files to disk — always upload buffer directly to storage
 
 ---
+
+## Adzuna API
+
+**Check first:** Check AGENTS.md for an installed Adzuna skill. If none exists — use this file and the official Adzuna API docs.
+
+### Job Search
+
+```typescript
+// lib/adzuna.ts
+export async function searchJobs(
+  jobTitle: string,
+  location: string,
+  country: string = "us",
+): Promise<AdzunaJob[]> {
+  const params = new URLSearchParams({
+    app_id: process.env.ADZUNA_APP_ID!,
+    app_key: process.env.ADZUNA_APP_KEY!,
+    what: jobTitle,
+    category: "it-jobs", // always filter to IT jobs
+    results_per_page: "10",
+    "content-type": "application/json",
+  });
+
+  // Only add where if location is provided
+  if (location) {
+    params.set("where", location);
+  }
+
+  const response = await fetch(
+    `https://api.adzuna.com/v1/api/jobs/${country}/search/1?${params}`,
+  );
+
+  if (!response.ok) {
+    throw new Error(`Adzuna API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.results || [];
+}
+```
+
+### Response Shape
+
+Each Adzuna job result contains:
+
+```typescript
+type AdzunaJob = {
+  id: string;
+  title: string;
+  company: { display_name: string };
+  location: { display_name: string };
+  description: string; // snippet only — not full description
+  redirect_url: string; // Adzuna tracking URL → redirects to actual job
+  salary_min?: number;
+  salary_max?: number;
+  salary_is_predicted: "0" | "1"; // "1" means salary is estimated
+  contract_type?: string;
+  created: string; // ISO date string
+  category: { tag: string; label: string };
+};
+```
+
+### Saving Jobs to DB
+
+```typescript
+// Map Adzuna result to jobs table
+const jobRecord = {
+  user_id: userId,
+  run_id: runId,
+  source: "search", // always 'search' for Adzuna jobs
+  source_url: job.redirect_url,
+  external_apply_url: job.redirect_url,
+  title: job.title,
+  company: job.company.display_name,
+  location: job.location.display_name,
+  salary: job.salary_min
+    ? `$${Math.round(job.salary_min / 1000)}k - $${Math.round(job.salary_max! / 1000)}k`
+    : null,
+  job_type: job.contract_type || "fulltime",
+  about_role: job.description, // Adzuna returns snippet — used as description
+  match_score: scoredJob.matchScore,
+  match_reason: scoredJob.matchReason,
+  matched_skills: scoredJob.matchedSkills,
+  missing_skills: scoredJob.missingSkills,
+  found_at: new Date().toISOString(),
+};
+```
+
+**Rules:**
+
+- Always include `category=it-jobs` — never search Adzuna without this filter
+- Never pass `where` if location is empty — omit the parameter entirely
+- `source` is always `'search'` for Adzuna jobs — never any other value
+- `salary_is_predicted: "1"` means Adzuna estimated the salary — this is normal
+- Always display "Jobs by Adzuna" credit on job listings — 116x23px minimum linked to adzuna.com
+- Adzuna description is a snippet — GPT-4o scores from it, not a full description
+- Default country to `'us'` — support `gb`, `au`, `ca` as alternatives
 
 ---
 
@@ -187,81 +258,30 @@ await insforge.storage
 
 **Check first:** Check AGENTS.md for an installed Browserbase skill. If a Browserbase MCP server is configured — use it. The skill/MCP will have the latest session management and API patterns.
 
-### Session Creation
+### Session Creation — Company Research
 
 ```typescript
 import Browserbase from "@browserbasehq/sdk";
 
 const bb = new Browserbase({ apiKey: process.env.BROWSERBASE_API_KEY! });
 
-// Standard session
+// Single session for company research — sequential page visits
 const session = await bb.sessions.create({
   projectId: process.env.BROWSERBASE_PROJECT_ID!,
+  timeout: 120, // 2 minute session — visits 3-4 pages max
 });
-
-// Session with LinkedIn context
-const session = await bb.sessions.create({
-  projectId: process.env.BROWSERBASE_PROJECT_ID!,
-  browserSettings: {
-    context: {
-      id: profile.linkedin_context_id,
-      persist: true,
-    },
-  },
-});
-```
-
-### Fetch API
-
-```typescript
-// Lightweight page retrieval — no JS execution
-const response = await bb.fetchAPI.create({
-  url: jobUrl,
-  proxies: true, // enable if getting blocked
-});
-
-// response.content contains raw HTML
-// response.statusCode — check for 200 before using
-if (response.statusCode !== 200)
-  throw new Error(`Fetch failed: ${response.statusCode}`);
-```
-
-### Context Creation (LinkedIn Connect)
-
-```typescript
-// Create a persistent context
-const context = await bb.contexts.create({
-  projectId: process.env.BROWSERBASE_PROJECT_ID!,
-});
-
-// Create session using that context
-const session = await bb.sessions.create({
-  projectId: process.env.BROWSERBASE_PROJECT_ID!,
-  browserSettings: {
-    context: {
-      id: context.id,
-      persist: true,
-    },
-  },
-});
-
-// Get live view for user to log in manually
-const { debuggerFullscreenUrl } = await bb.sessions.debug(session.id);
-
-// Return both — save context.id after user logs in
-return { contextId: context.id, liveViewUrl: debuggerFullscreenUrl };
 ```
 
 **Important — Browserbase runs independently from your Next.js server:**
-Browserbase sessions run on Browserbase's cloud infrastructure, not inside your Next.js API route. A 600-second Browserbase session timeout does not require increasing the Next.js function timeout. The API route triggers the Browserbase session and returns a response while the session continues running independently on Browserbase's platform. Do not add `maxDuration` or any timeout configuration to Next.js API routes to accommodate Browserbase session length.
+Browserbase sessions run on Browserbase's cloud infrastructure, not inside your Next.js API route. The API route triggers the Browserbase session and returns a response while the session continues running independently on Browserbase's platform. Do not add `maxDuration` or any timeout configuration to Next.js API routes to accommodate Browserbase session length.
 
 **Rules:**
 
-- Always end sessions cleanly — call session release when done
+- Always use single sessions — never parallel sessions (free plan limit)
+- Session timeout is 120 seconds — sufficient for 3-4 page visits
+- Always end sessions cleanly — call stagehand.close() when done
 - Project ID always from `process.env.BROWSERBASE_PROJECT_ID` — never hardcode
 - Browserbase client lives in `lib/browserbase.ts` — always import from there
-- Use Fetch API for reading job descriptions — cheaper than full browser sessions
-- Use full browser sessions for interactive browsing (LinkedIn job search)
 
 ---
 
@@ -279,14 +299,12 @@ const stagehand = new Stagehand({
   apiKey: process.env.BROWSERBASE_API_KEY!,
   projectId: process.env.BROWSERBASE_PROJECT_ID!,
   browserbaseSessionID: session.id,
-  modelName: "gpt-4o",
-  modelClientOptions: {
-    apiKey: process.env.OPENAI_API_KEY!,
-  },
+  model: { modelName: "openai/gpt-4o", apiKey: process.env.OPENAI_API_KEY! },
+  disablePino: true,
 });
 
 await stagehand.init();
-const page = stagehand.page;
+const page = stagehand.context.activePage()!;
 ```
 
 ### extract()
@@ -295,16 +313,20 @@ const page = stagehand.page;
 import { z } from "zod";
 
 const result = await stagehand.extract({
-  instruction: "Extract all job listings visible on this page.",
+  instruction:
+    "Extract the company overview, main product description, and any technology mentions from this page.",
   schema: z.object({
-    jobs: z.array(
-      z.object({
-        title: z.string(),
-        company: z.string(),
-        location: z.string().optional(),
-        applyUrl: z.string().optional(),
-      }),
-    ),
+    companyOverview: z.string().optional(),
+    mainProduct: z.string().optional(),
+    techMentions: z.array(z.string()).optional(),
+    navLinks: z
+      .array(
+        z.object({
+          label: z.string(),
+          url: z.string(),
+        }),
+      )
+      .optional(),
   }),
 });
 ```
@@ -315,44 +337,146 @@ const result = await stagehand.extract({
 // Always wrap in try/catch
 try {
   await stagehand.act({
-    action: "Click the first job listing in the search results",
+    action: "Click the About link in the navigation",
   });
 } catch (error) {
-  await logAgentError(runId, null, error);
+  await logAgentError(jobId, null, error);
 }
 ```
 
-### DOM Scraping (LinkedIn job listings)
+## Company Research Section
 
-For LinkedIn job listings — use DOM scraping first before Stagehand extract. DOM scraping is faster and uses no LLM tokens:
+Replace the existing Stagehand "Company Research Pattern" section in library-docs.md with this:
+
+---
+
+### Company Research Pattern
+
+Three-step process: homepage extraction → sub-page extraction → GPT-4o synthesis.
+Job description and user profile come from DB — never re-fetch what you already have.
+Browser's only job is the company website.
 
 ```typescript
-// DOM scraping via page.evaluate() — no LLM call
-const domJobs = await page.evaluate(() => {
-  const cards = document.querySelectorAll(
-    '[data-job-id], a[href*="/jobs/view/"]',
-  );
-  return Array.from(cards).map((card) => ({
-    title: card.querySelector(".job-card-list__title")?.textContent?.trim(),
-    company: card
-      .querySelector(".job-card-container__primary-description")
-      ?.textContent?.trim(),
-    location: card
-      .querySelector(".job-card-container__metadata-item")
-      ?.textContent?.trim(),
-    linkedinUrl: card.querySelector('a[href*="/jobs/view/"]')?.href,
-  }));
+// Step 1 — Homepage extraction
+const homepageData = await stagehand.extract({
+  instruction:
+    "This is a company's homepage. Capture what the company actually does, who it's for, and any concrete signals (funding, customers, scale, mission, recent launches). Then find the internal links most worth visiting to research them as an employer.",
+  schema: z.object({
+    oneLiner: z.string().describe("What the company does in one sentence"),
+    productSummary: z
+      .string()
+      .describe("What they build/sell and who it's for"),
+    signals: z
+      .array(z.string())
+      .describe("Funding, notable customers, scale, mission, recent news"),
+    pageLinks: z
+      .array(
+        z.object({
+          url: z.string(),
+          kind: z.enum([
+            "about",
+            "careers",
+            "blog",
+            "engineering",
+            "product",
+            "team",
+            "other",
+          ]),
+        }),
+      )
+      .describe("Internal links worth visiting"),
+  }),
 });
 
-// Then Stagehand extract enriches with LLM
-const llmJobs = await stagehand.extract({
-  instruction: "Extract all job listings visible on this page.",
-  schema: z.object({ jobs: z.array(jobSchema) }),
+// If oneLiner and productSummary are empty — wrong site or parked domain
+// Skip to synthesis with job description and profile only
+if (!homepageData.oneLiner && !homepageData.productSummary) {
+  await stagehand.close();
+  // proceed to synthesis with empty companyResearch
+}
+
+// Step 2 — Sub-page extraction (max 3, prefer about/blog/engineering/product over careers)
+const subPageData = await stagehand.extract({
+  instruction:
+    "Extract substance that helps a candidate understand this company before applying: what they do, their values and how they work, the specific technologies and tools they use, notable projects or customers, and how the team operates. Ignore nav, footers, cookie banners, and generic marketing copy.",
+  schema: z.object({
+    keyPoints: z.array(z.string()),
+    technologies: z
+      .array(z.string())
+      .describe("Specific languages, frameworks, tools, platforms"),
+    valuesOrCulture: z
+      .array(z.string())
+      .describe("Stated values, working style, team norms"),
+    notable: z
+      .array(z.string())
+      .describe("Customers, funding, scale, projects, awards"),
+  }),
 });
 
-// Merge and deduplicate by title|company|location
-const merged = mergeJobs(domJobs, llmJobs);
+// Step 3 — GPT-4o synthesis (after browser closes)
+// Feed three data sources: company research + job from DB + profile from DB
+const systemPrompt = `You are a sharp career strategist preparing a candidate to apply for a specific role. You are given (a) research collected from the company's own website, (b) the job posting, and (c) the candidate's profile. Produce a concise, concrete briefing that gives this specific candidate an edge for this specific role.
+
+Rules:
+- Ground every company claim in the provided research or job posting. Never invent funding, customers, headcount, or facts. If research was thin, infer carefully from the job posting and say what's inferred.
+- Be specific to THIS candidate. Connect their actual skills and past work to this company's stack, product, and values. No generic advice that would apply to anyone.
+- Turn the candidate's missing skills into a strategy: how to frame the gap honestly and what adjacent experience to lean on.
+- Talking points and questions must reference real things from the research, the kind of detail that signals the candidate did their homework.
+- Keep every item tight: one or two sentences. No fluff.
+
+Return ONLY valid JSON matching this shape:
+{
+  "companyOverview": string,
+  "techStack": string[],
+  "culture": string[],
+  "whyThisRole": string,
+  "yourEdge": string[],
+  "gapsToAddress": string[],
+  "smartQuestions": string[],
+  "interviewPrep": string[],
+  "sources": string[]
+}`;
+
+const userPrompt = `COMPANY RESEARCH (from their website):
+${JSON.stringify(companyResearch)}
+
+JOB POSTING:
+Title: ${job.title}
+Company: ${job.company}
+Description: ${job.description}
+Matched skills (already computed): ${job.matched_skills.join(", ")}
+Missing skills (already computed): ${job.missing_skills.join(", ")}
+
+CANDIDATE PROFILE:
+Current title: ${profile.current_title}
+Experience: ${profile.years_experience} years, level ${profile.experience_level}
+Skills: ${profile.skills.join(", ")}
+Work history: ${JSON.stringify(profile.work_experience)}`;
+
+const response = await openai.chat.completions.create({
+  model: "gpt-4o",
+  response_format: { type: "json_object" },
+  temperature: 0.4,
+  messages: [
+    { role: "system", content: systemPrompt },
+    { role: "user", content: userPrompt },
+  ],
+});
 ```
+
+**Dossier fields:**
+
+| Field           | Type     | Purpose                                             |
+| --------------- | -------- | --------------------------------------------------- |
+| companyOverview | string   | What the company does                               |
+| techStack       | string[] | Technologies they use                               |
+| culture         | string[] | Values and working style                            |
+| whyThisRole     | string   | Why this role exists                                |
+| yourEdge        | string[] | Specific links between THIS candidate and this role |
+| gapsToAddress   | string[] | Missing skills reframed as strategy                 |
+| smartQuestions  | string[] | Questions that show real research                   |
+| interviewPrep   | string[] | Topics to prepare for this role                     |
+| sources         | string[] | Pages the company info came from                    |
 
 **Rules:**
 
@@ -360,15 +484,12 @@ const merged = mergeJobs(domJobs, llmJobs);
 - Always wrap every `act()` and `extract()` in try/catch
 - Always call `await stagehand.close()` when done — ends the Browserbase session
 - Model is always `gpt-4o` — never use other models
-- Add 2-3 second delays between page navigations — `await page.waitForTimeout(2000)`
-- Always call `await page.waitForLoadState('networkidle')` after navigation
-- For LinkedIn — use DOM scraping first, Stagehand extract second, merge results
-
----
-
-## OpenAI GPT-4o
-
-**Check first:** Check AGENTS.md for an installed OpenAI skill. The skill will have the latest API patterns and model capabilities.
+- Temperature is `0.4` for synthesis — grounded but flexible enough to make real connections
+- Max 3 sub-pages — never exceed this on free plan
+- Always close session in finally block — never leave sessions open even if research fails
+- Job description and profile always come from DB — never re-fetch via browser
+- If browser research returns empty — still run synthesis with job + profile only
+- yourEdge, gapsToAddress, and smartQuestions are the most valuable fields — never skip them
 
 ### Structured JSON Response
 
@@ -398,15 +519,14 @@ const result = JSON.parse(response.choices[0].message.content!);
 
 **Temperature settings:**
 
-- `0.3` — matching, scoring, extraction — deterministic results
-- `0.7` — cover letters, resume writing — natural variation
+- `0.3` — matching, scoring, extraction, research synthesis — deterministic results
+- `0.7` — resume generation — natural variation
 
 **Max tokens:**
 
-- Job description extraction: `1500`
 - Job matching + scoring: `300`
-- Cover letter: `500`
-- Resume tailoring: `1000`
+- Company research synthesis: `800`
+- Resume generation: `1000`
 - Profile extraction from resume: `800`
 
 **Rules:**
@@ -416,6 +536,7 @@ const result = JSON.parse(response.choices[0].message.content!);
 - Always parse `response.choices[0].message.content` as string — even with json_object it returns a string
 - Always validate parsed JSON before using — wrap in try/catch
 - Match threshold is always `MATCH_THRESHOLD` from `lib/utils.ts` — never hardcode 70
+- Company research synthesis must always return a complete dossier — never return empty even if browser research failed
 
 ---
 
@@ -441,7 +562,7 @@ export function initPostHog() {
 // Capture event client-side
 posthog.capture("job_found", {
   userId,
-  source: "linkedin",
+  source: "search",
   matchScore: score,
 });
 ```
@@ -463,8 +584,8 @@ export const createPostHogServer = () =>
 const posthog = createPostHogServer();
 posthog.capture({
   distinctId: userId,
-  event: "job_found",
-  properties: { source: "linkedin", matchScore: score },
+  event: "company_researched",
+  properties: { userId, jobId, company },
 });
 await posthog.shutdown(); // required — ensures event is sent
 ```

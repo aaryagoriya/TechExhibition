@@ -46,6 +46,14 @@ type PostHogEventInput =
       };
     }
   | {
+      event: "company_researched";
+      properties: {
+        userId: string;
+        jobId: string;
+        company: string;
+      };
+    }
+  | {
       event: "linkedin_connected";
       properties: {
         userId: string;

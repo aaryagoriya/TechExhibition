@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { LogOut, UserCircle } from "lucide-react";
 
 import { Logo } from "@/components/layout/Logo";
+import { PostHogLogoutLink } from "@/components/analytics/PostHogLogoutLink";
 
 const navigationItems = [
   { href: "/dashboard", label: "Dashboard" },
@@ -11,7 +13,11 @@ const navigationItems = [
   { href: "/profile", label: "Profile" },
 ];
 
-export function Navbar() {
+type Props = {
+  isAuthenticated?: boolean;
+};
+
+export function Navbar({ isAuthenticated = false }: Props) {
   const pathname = usePathname();
 
   return (
@@ -43,9 +49,19 @@ export function Navbar() {
           })}
         </nav>
 
-        <Link href="/login" className="landing-button-primary min-h-10 px-4">
-          Start for free
-        </Link>
+        {isAuthenticated ? (
+          <div className="flex items-center gap-6">
+            <UserCircle className="hidden h-6 w-6 text-info-muted sm:block" />
+            <PostHogLogoutLink className="inline-flex items-center gap-2 text-sm font-medium text-text-secondary transition-colors hover:text-text-primary">
+              <LogOut className="h-4 w-4" />
+              <span>Sign out</span>
+            </PostHogLogoutLink>
+          </div>
+        ) : (
+          <Link href="/login" className="landing-button-primary min-h-10 px-4">
+            Start for free
+          </Link>
+        )}
       </div>
     </header>
   );

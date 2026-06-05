@@ -312,3 +312,197 @@ Last updated: 2026-06-03
 
 **Pattern notes:**
 Form labels use `text-xs font-medium uppercase tracking-wide` — all caps with letter-spacing, not sentence case. Tag inputs render removable pill chips with `bg-accent-light text-accent`. Work Experience entries are individually bordered sub-cards inside the main form card. Month/Year pickers use two adjacent `<select>` elements. Save Profile button is full-width at the bottom of the card.
+
+---
+
+### SearchControls
+
+File: components/find-jobs/SearchControls.tsx
+Last updated: 2026-06-05
+
+| Property         | Class                                                                                 |
+| ---------------- | ------------------------------------------------------------------------------------- |
+| Background       | `bg-surface`                                                                          |
+| Border           | `border border-border`                                                                |
+| Border radius    | `rounded-2xl` card, `rounded-lg` inputs and button                                   |
+| Text — primary   | `text-sm text-text-primary`                                                           |
+| Text — secondary | `text-xs font-medium uppercase tracking-wide text-text-secondary` labels              |
+| Spacing          | `p-6` card, `gap-4` grid                                                              |
+| Hover state      | `hover:opacity-90` Find Jobs button                                                   |
+| Shadow           | `shadow-[0px_1px_3px_rgba(0,0,0,0.1),0px_1px_2px_-1px_rgba(0,0,0,0.1)]`             |
+| Accent usage     | `bg-accent text-accent-foreground` button; `focus:ring-accent` inputs; `bg-success-lightest border-success-light text-success-foreground` success banner |
+
+**Pattern notes:**
+Three-column grid at `sm:` breakpoint — job title (with search icon), location, Find Jobs button aligned to bottom. Success banner uses `✨` emoji + green pill. Button disabled when job title empty or search in progress.
+
+---
+
+### JobFilters
+
+File: components/find-jobs/JobFilters.tsx
+Last updated: 2026-06-05
+
+| Property         | Class                                                                                 |
+| ---------------- | ------------------------------------------------------------------------------------- |
+| Background       | `bg-surface`                                                                          |
+| Border           | `border border-border` on inputs and selects                                          |
+| Border radius    | `rounded-lg`                                                                          |
+| Text — primary   | `text-sm font-medium text-text-primary`                                               |
+| Text — secondary | `text-text-muted` placeholder and chevron icons                                       |
+| Spacing          | `gap-3` layout, `gap-2` dropdown row                                                  |
+| Hover state      | `none`                                                                                |
+| Shadow           | `none`                                                                                |
+| Accent usage     | `focus:ring-accent focus:border-accent`                                               |
+
+**Pattern notes:**
+`appearance-none` on `<select>` with absolute `ChevronDown` icon overlay. Filter/sort dropdowns sit in a flex row on the right; text search stretches to fill the left. All filter/sort changes reset pagination to page 1 (handled by parent).
+
+---
+
+### JobsTable
+
+File: components/find-jobs/JobsTable.tsx
+Last updated: 2026-06-05
+
+| Property         | Class                                                                                 |
+| ---------------- | ------------------------------------------------------------------------------------- |
+| Background       | `bg-surface`, `hover:bg-surface-secondary` rows                                       |
+| Border           | `border border-border` card, `border-b border-border` row separators                 |
+| Border radius    | `rounded-2xl` card, `rounded-full` score bar, `rounded-lg` company icon box          |
+| Text — primary   | `text-sm font-medium text-text-primary` company; `text-sm text-text-primary` role    |
+| Text — secondary | `text-xs font-medium uppercase tracking-wide text-text-secondary` column headers; `text-sm text-text-muted` date |
+| Spacing          | `px-6 py-3` headers, `px-6 py-4` cells                                               |
+| Hover state      | `hover:bg-surface-secondary` on `<tr>`                                                |
+| Shadow           | `shadow-[0px_1px_3px_rgba(0,0,0,0.1),0px_1px_2px_-1px_rgba(0,0,0,0.1)]`             |
+| Accent usage     | Score bar fill: `bg-success` (≥80), `bg-info` (60-79), `bg-warning` (<60); source badge `bg-accent-light text-accent` for Search |
+
+**Pattern notes:**
+Each cell wraps its content in `<Link href="/find-jobs/{id}">` for full-row clickability. Score bar is `h-1 w-24 bg-border-light` track with colored fill div driven by `style={{ width: \`${score}%\` }}`. Company icon uses `Building2` from lucide as a placeholder. Source badge is pill-shaped. Accepts optional `isLoading` prop — dims table with `opacity-60 transition-opacity` during server fetch and skips empty-state when loading.
+
+---
+
+### JobsPagination
+
+File: components/find-jobs/JobsPagination.tsx
+Last updated: 2026-06-05
+
+| Property         | Class                                                                                 |
+| ---------------- | ------------------------------------------------------------------------------------- |
+| Background       | `bg-surface` on page number and Previous/Next buttons                                 |
+| Border           | `border border-border`                                                                |
+| Border radius    | `rounded-lg`                                                                          |
+| Text — primary   | `text-sm font-medium text-text-primary`                                               |
+| Text — secondary | `text-sm text-text-muted` "Showing X to Y of Z" label                                |
+| Spacing          | `gap-1` between page buttons, `h-8 w-8` page number buttons                          |
+| Hover state      | `hover:bg-surface-secondary` on Previous/Next and inactive page numbers               |
+| Shadow           | `none`                                                                                |
+| Accent usage     | `bg-accent text-accent-foreground` active page button                                 |
+
+**Pattern notes:**
+`getPageNumbers()` returns ellipsis items as `"..."` strings alongside page numbers. Always shows first/last page; ellipsis collapses middle range. `disabled:opacity-40` on Previous/Next at boundaries. Returns `null` when `totalCount === 0`.
+
+---
+
+### Job Details Page
+
+File: app/find-jobs/[id]/page.tsx and components/job-details/*
+Last updated: 2026-06-05
+
+| Property         | Class                                                                                 |
+| ---------------- | ------------------------------------------------------------------------------------- |
+| Page shell       | `mx-auto flex min-h-[calc(100vh-4rem)] max-w-[820px] flex-col gap-6 px-4 py-8 sm:px-6 lg:px-0` |
+| Cards            | `rounded-2xl border border-border bg-surface p-6 shadow-card`; research card uses `overflow-hidden` and a `border-b border-border` header |
+| Header icon      | `flex h-14 w-14 ... rounded-2xl border border-border bg-surface-secondary`; info icons use `h-10 w-10 rounded-xl` with token backgrounds |
+| Text — primary   | Page title `text-2xl font-semibold leading-8 text-text-primary`; card headings `text-base font-semibold leading-6 text-text-primary`; body `whitespace-pre-line text-sm font-medium leading-6 text-text-primary` |
+| Text — secondary | Section eyebrows `text-xs font-semibold uppercase leading-4 tracking-wide text-text-secondary`; labels `text-xs font-medium uppercase leading-4 tracking-wide text-text-muted` |
+| Buttons          | Primary CTA `min-h-12 w-full rounded-lg bg-accent px-4 py-3 text-sm font-medium text-accent-foreground`; secondary external link `min-h-10 rounded-lg border border-border bg-surface px-4 py-2` |
+| Badges           | Match score `rounded-full bg-success-lightest px-3 py-1 text-xs font-medium text-success-foreground`; matched skills `bg-success-lightest text-success-foreground`; gap skills `bg-accent-muted text-accent` |
+| Empty state      | `flex min-h-64 flex-col items-center justify-center px-6 py-14 text-center` with `h-12 w-12 rounded-2xl bg-surface-secondary` icon shell and `bg-accent-muted text-accent` helper badge |
+
+**Pattern notes:**
+Job detail pages use a narrow centered column rather than the full dashboard width. Job descriptions render the complete stored text with `whitespace-pre-line`, append any populated structured bullet sections, and show a bordered `View Full Job Post` notice when the saved Adzuna preview ends with `…` or `...`. Company research now renders a saved 9-field dossier read-only; once research exists, the generate action is hidden. Authenticated app pages pass `isAuthenticated` to `Navbar` so the top-right user icon and sign-out action match the signed-in designs.
+
+### Company Research Dossier
+
+File: components/job-details/CompanyResearch.tsx and components/job-details/ResearchCompanyButton.tsx
+Last updated: 2026-06-05
+
+| Property         | Class                                                                                 |
+| ---------------- | ------------------------------------------------------------------------------------- |
+| Background       | `bg-surface` outer card; `bg-surface-secondary` inner dossier panels                  |
+| Border           | `border border-border` outer card and inner panels; `border-b border-border` header; `border-t border-border` sources footer |
+| Border radius    | `rounded-2xl` outer card, `rounded-xl` panels, `rounded-lg` section icons and button, `rounded-full` tags |
+| Text — primary   | `text-base font-semibold leading-6 text-text-primary` card heading; `text-sm font-semibold leading-5 text-text-primary` section headings; `text-sm font-medium leading-6 text-text-primary` body |
+| Text — secondary | `text-xs font-medium uppercase tracking-wide text-text-muted` source label; `text-xs text-error` and `text-xs text-success` button feedback |
+| Spacing          | Header `p-6`, body `p-6` with `gap-6`, inner panels `p-4`, list items `space-y-2`     |
+| Hover state      | Research button `hover:opacity-90`; source links `hover:text-text-primary`            |
+| Shadow           | `shadow-card` on outer card only                                                      |
+| Accent usage     | Button `bg-accent text-accent-foreground`; tech tags `bg-accent-muted text-accent`; section icon shells rotate between `bg-accent-muted`, `bg-success-lightest`, and `bg-info-lightest` token backgrounds |
+
+**Pattern notes:**
+The research card preserves the Feature 12 card shell and header, then swaps between an empty state with a client action and a dense read-only dossier. The client action lives in its own component, uses plain `fetch` plus `useTransition`, and calls `router.refresh()` after the API saves research. Dossier sections should stay compact, token-driven, and source-linked; do not add a refresh action unless Feature 13 scope changes.
+
+---
+
+### StatsBar
+
+File: components/dashboard/StatsBar.tsx
+Last updated: 2026-06-05
+
+| Property         | Class                                                                                 |
+| ---------------- | ------------------------------------------------------------------------------------- |
+| Background       | `bg-surface`                                                                          |
+| Border           | `border border-border`                                                                |
+| Border radius    | `rounded-2xl`                                                                         |
+| Text — primary   | `text-3xl font-semibold leading-9 text-text-primary` stat value                       |
+| Text — secondary | `text-sm font-medium text-text-secondary` label; `text-xs text-text-muted` sub-label  |
+| Spacing          | `p-6` card, `mt-2` between value and trend row, `gap-2` trend row                    |
+| Trend badge      | `rounded-sm bg-success-lightest px-2 py-0.5 text-xs font-medium text-success-darker` |
+| Shadow           | `shadow-card`                                                                         |
+
+**Pattern notes:**
+Four cards in a responsive grid (`grid-cols-1 sm:grid-cols-2 lg:grid-cols-4`). Trend badge only renders when a `trend` string is present. Badge uses `TrendingUp` lucide icon at `h-3 w-3`.
+
+---
+
+### RecentActivity
+
+File: components/dashboard/RecentActivity.tsx
+Last updated: 2026-06-05
+
+| Property         | Class                                                                                 |
+| ---------------- | ------------------------------------------------------------------------------------- |
+| Background       | `bg-surface`                                                                          |
+| Border           | `border border-border`                                                                |
+| Border radius    | `rounded-2xl`                                                                         |
+| Text — primary   | `text-sm font-medium leading-5 text-text-primary` activity text                       |
+| Text — secondary | `text-xs text-text-muted` timestamp                                                   |
+| Spacing          | `p-6` card, `mt-5 space-y-5` list, `gap-3` item row                                  |
+| Shadow           | `shadow-card`                                                                         |
+| Dot — job_found  | outer `h-4 w-4 rounded-full bg-success-light`, inner `h-2 w-2 rounded-full bg-success-alt` |
+| Dot — researched | outer `h-4 w-4 rounded-full bg-info-light`, inner `h-2 w-2 rounded-full bg-info`     |
+
+**Pattern notes:**
+Activity dots use inline `style` with CSS variables for the exact token colors (success-light/success-alt, info-light/info) since Tailwind v4 generates classes from these tokens but the dot outer ring needs the `background` shorthand. `mt-0.5` on the dot aligns it with the first line of multi-line activity text.
+
+---
+
+### Analytics Charts
+
+File: components/dashboard/AnalyticsCharts.tsx
+Last updated: 2026-06-05
+
+| Property      | Value                                                                           |
+| ------------- | ------------------------------------------------------------------------------- |
+| Library       | `recharts` — `BarChart`, `AreaChart`, `ResponsiveContainer`                     |
+| Chart height  | `h-55` (220px) container, `ResponsiveContainer width="100%" height="100%"`      |
+| Grid lines    | `vertical={false}`, `stroke="var(--color-border)"`, `strokeDasharray="4 4"`    |
+| Axis labels   | `fill: "#9CA3AF"`, `fontSize: 12`, `axisLine={false}`, `tickLine={false}`       |
+| Tooltip       | `borderRadius: 8`, `border: "1px solid var(--color-border)"`, `fontSize: 12`   |
+| Research bars | `fill="var(--color-info)"`, `radius={[4,4,0,0]}`, `maxBarSize={40}`             |
+| Jobs area     | `stroke="var(--color-accent)"`, `strokeWidth={3}`, gradient fill id `jobsGradient` (opacity 0.2→0) |
+| Match bars    | `fill="var(--color-success)"`, `radius={[4,4,0,0]}`, `maxBarSize={60}`          |
+| Card shell    | `rounded-2xl border border-border bg-surface p-6 shadow-card`                  |
+
+**Pattern notes:**
+Three named exports from one file — `CompanyResearchChart`, `JobsOverTimeChart`, `MatchDistributionChart`. All are `"use client"` (recharts needs browser). Colors use CSS variable references (`var(--color-*)`) so they stay token-driven inside recharts props. Left margin is `left: -20` on all charts to trim excess YAxis whitespace. Area gradient defined in `<defs>` with id `jobsGradient`.

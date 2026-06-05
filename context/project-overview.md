@@ -2,9 +2,7 @@
 
 ## About the Project
 
-JobPilot is a full stack AI-powered job hunting assistant. The user sets up their profile once, uploads their resume, and the agent automatically discovers relevant jobs from LinkedIn — scoring each one against the user's profile using GPT-4o. For matched jobs the agent generates personalized cover letters and tailors the user's resume specifically for each role. The user reviews everything and applies manually with one click.
-
-Users can also paste any job URL directly into the Find Jobs page — the agent fetches that job, scores it, and adds it to their jobs list exactly like an automatically discovered job.
+JobPilot is a full stack AI-powered job hunting assistant. The user sets up their profile once, uploads their resume, and the agent automatically discovers relevant jobs from Adzuna — scoring each one against the user's profile using GPT-4o. For jobs they're interested in, the agent researches the company across their public web pages and builds a structured dossier — company overview, tech stack, culture, why the role exists, and interview prep. The user reviews everything and applies with one click.
 
 The entire process is tracked on a dashboard with PostHog-powered analytics and a recent activity feed.
 
@@ -12,9 +10,9 @@ The entire process is tracked on a dashboard with PostHog-powered analytics and 
 
 ## The Problem It Solves
 
-Job hunting is one of the most repetitive and time-consuming tasks a developer faces. Reading dozens of job descriptions, deciding if a role fits, rewriting a resume for each application, writing cover letters from scratch — all of this before even clicking apply.
+Job hunting is one of the most repetitive and time-consuming tasks a developer faces. Reading dozens of job descriptions, deciding if a role fits, researching each company from scratch — all of this before even clicking apply.
 
-JobPilot eliminates all of that preparation work. The agent finds the jobs, scores them intelligently against the user's actual skills, tailors the resume, and writes the cover letter. The user just decides which ones to apply to and clicks.
+JobPilot eliminates all of that preparation work. The agent finds the jobs, scores them intelligently against the user's actual skills, and researches each company so the user arrives at every application fully informed. The user just decides which ones to apply to and clicks.
 
 ---
 
@@ -24,9 +22,9 @@ JobPilot eliminates all of that preparation work. The agent finds the jobs, scor
 /                  → Homepage
 /login             → Auth page (Google + GitHub OAuth)
 /dashboard         → Overview, recent activity, analytics
-/find-jobs         → Search controls + full jobs list + job URL input
-/find-jobs/[id]    → Individual job details page
-/profile           → Profile form, resume management, connected accounts
+/find-jobs         → Search controls + full jobs list
+/find-jobs/[id]    → Individual job details page + company research
+/profile           → Profile form, resume management
 ```
 
 ---
@@ -54,9 +52,7 @@ Full width layout on all pages. No sidebar.
 ### Onboarding
 
 - User signs up via InsForge auth (Google or GitHub OAuth)
-- On login app checks profiles table for this user
-- Profile incomplete → redirect to /profile
-- Profile complete → redirect to /dashboard
+- On login → redirect to /dashboard
 - Dashboard shows incomplete profile banner if profile not finished
 
 ### Profile Setup
@@ -64,35 +60,20 @@ Full width layout on all pages. No sidebar.
 - User fills profile form — all standard resume fields
 - User uploads their existing resume PDF
 - Two options on upload:
-  - "Update Profile" → GPT-4o parses resume and auto-fills profile form fields
+  - "Extract from Resume" → GPT-4o parses resume and auto-fills profile form fields
   - "Skip" → resume stored as-is, profile unchanged
 - User can manually edit any profile field at any time
-- User can generate a clean generic PDF resume from their current profile data
-- User can connect LinkedIn account via Browserbase Context — opens in new tab, user logs in manually
+- User can generate a clean professional PDF resume from their current profile data using GPT-4o
 
-### Finding Jobs — Two Methods
-
-**Method 1 — LinkedIn Discovery**
+### Finding Jobs — Adzuna Discovery
 
 - User goes to Find Jobs page
 - Enters job title and location
 - Clicks Find Jobs button
-- Agent opens Browserbase session using saved LinkedIn context
-- Stagehand browses LinkedIn job search with user's criteria
-- GPT-4o extracts and structures job description from each listing
+- Agent calls Adzuna API with user's search criteria
 - GPT-4o scores each job 0-100 against user profile
 - Jobs appear in the job list below
 - After search completes a message shows: "Found 8 jobs and saved 4 strong matches"
-- Only works if user has connected their LinkedIn account
-
-**Method 2 — URL Input**
-
-- User pastes any job URL into the URL input field on Find Jobs page
-- Browserbase Fetch API retrieves that page
-- GPT-4o extracts structured job data — title, company, description, requirements, benefits
-- GPT-4o scores job against user profile
-- Job added to jobs list with full details and match score
-- Works without LinkedIn connection — any job from any platform
 
 ### Job Matching
 
@@ -118,38 +99,30 @@ Full width layout on all pages. No sidebar.
   - Matched skills — green tags
   - Missing skills — red tags
   - Match reason paragraph from GPT-4o
-- Resume section:
-  - Current resume filename and download link
-  - Tailor Resume button
-  - After tailoring: original score vs tailored score comparison shown
-  - Warning before tailoring: "This will replace your current resume PDF. Your profile data will not change."
-  - Regenerate button after tailoring
-- Cover letter section:
-  - GPT-4o generated cover letter
-  - Copy button
-  - Regenerate button
+- Company Research section:
+  - Empty state with Research Company button
+  - After research: structured dossier showing company overview, tech stack, culture, why this role exists, interview prep talking points
+  - Powered by Browserbase + Stagehand browsing the company's public pages
 - Apply Now button — opens external apply URL in new tab
-- Previous Job button + Next Job button — navigate through jobs ordered by newest first
 
-### Resume Tailoring Flow
+### Company Research Flow
 
-- User clicks Tailor Resume on job details page
-- Warning modal: "This will replace your current resume PDF. Your profile data will not change."
-- User confirms
-- GPT-4o rewrites resume content to match this specific job description
-- Old tailored PDF for this job deleted from storage if it exists
-- New PDF generated and saved to InsForge Storage
-- Match score recalculated using tailored resume content
-- Score comparison shown: "Original: 72% → Tailored: 91%"
+- User clicks Research Company on job details page
+- Single Browserbase session opens with Stagehand
+- Agent navigates to company homepage — extracts overview, nav links, tech mentions
+- Agent visits About, Blog, Engineering pages if they exist
+- GPT-4o synthesizes all extracted content into structured dossier
+- Dossier displayed on job details page
+- If company site cannot be found — GPT-4o generates best dossier from company name and job description alone
 
 ### Dashboard
 
-- Stats bar — 4 cards: Total Jobs Found, Avg. Match Rate, Resumes Tailored, Cover Letters Generated
+- Stats bar — 4 cards: Total Jobs Found, Avg. Match Rate, Companies Researched, Jobs This Week
 - Recent activity — list of last 5-10 user actions pulled from DB
 - Analytics section (PostHog powered):
   - Jobs found over time — line chart
   - Match score distribution — bar chart
-  - Resume tailoring activity — bar chart
+  - Company research activity — bar chart
 
 ### Find Jobs Page
 
@@ -157,33 +130,31 @@ Full width layout on all pages. No sidebar.
   - Job title input
   - Location input
   - Find Jobs button
-  - URL input with Import Job button
   - Success message after search: "Found 8 jobs and saved 4 strong matches"
 - Full paginated job list below:
   - Filter: All Matches / High Match / Low Match dropdown
   - Sort dropdown: Match Score / Newest / Oldest
-  - Each job row: company, title, match score badge, salary, source badge, date found, tailored badge
+  - Each job row: company, title, match score badge, salary, source badge, date found
   - Click job row → opens job details page
   - Pagination — 20 jobs per page
+  - "Jobs by Adzuna" credit displayed on job listings
 
 ---
 
-## Data Architecture — Key Separation
+## Data Architecture
 
 ### Main Profile Data
 
 - Lives in `profiles` table
-- Only changes when user explicitly edits profile page or uploads resume and selects "Update Profile"
-- Used for initial job matching
-- Never modified by resume tailoring
+- Only changes when user explicitly edits profile page or uploads resume and selects "Extract from Resume"
+- Used for job matching
+- Never modified by any agent operation
 
-### Tailored Resume Data
+### Company Research Data
 
-- Tailored PDF stored separately per job in InsForge Storage
-- Old tailored PDF deleted before new one is uploaded
-- jobs.tailored_resume_url updated after each tailoring
-- jobs.tailored_match_score updated after score recalculation
-- Main profile data never changes
+- Stored in `jobs.company_research` jsonb column
+- Generated per job when user clicks Research Company
+- Never affects profile data or match score
 
 ---
 
@@ -192,35 +163,32 @@ Full width layout on all pages. No sidebar.
 - Homepage with hero, how it works, features, footer
 - Top navbar — Dashboard, Find Jobs, Profile
 - InsForge authentication (Google + GitHub OAuth)
-- Smart redirect based on profile completion
+- Redirect to dashboard after login
 - Profile form with all standard resume fields
-- Resume PDF upload with optional profile auto-fill
-- Resume PDF generation from profile data (generic clean format)
-- LinkedIn account connection via Browserbase Context (opens in new tab)
-- LinkedIn job discovery via Browserbase + Stagehand (requires connected account)
-- Manual job URL input — any job URL from any platform
-- GPT-4o job description extraction and structuring
+- Resume PDF upload with optional profile auto-fill via GPT-4o
+- Resume PDF generation from profile data using GPT-4o
+- Adzuna API job discovery — searches by title and location, category filtered to IT jobs
 - GPT-4o job matching with score, reason, matched skills, missing skills
 - Job details page with full structured description
-- Per-job AI cover letter generation
-- Resume tailoring per job with score comparison
-- Match score recalculation after tailoring
-- Warning before resume overwrite
-- Old tailored PDF deleted before new one uploaded
-- Previous Job + Next Job navigation on job details page
+- Company Research Agent — single Browserbase session browses company public pages, GPT-4o builds dossier
 - Find Jobs page with search controls, filter, sort dropdown, pagination
 - Dashboard with stats bar, recent activity, analytics charts
 - PostHog event tracking throughout
 - PostHog analytics charts on dashboard
 - Incomplete profile banner on dashboard
+- "Jobs by Adzuna" credit on all job listings
 
 ---
 
 ## Features Out of Scope
 
 - Auto apply — agent does not fill or submit application forms
-- LinkedIn Easy Apply — never touched
-- Easy Apply detection or apply button interaction
+- LinkedIn scraping or LinkedIn account connection
+- URL input for manual job import
+- Cover letter generation
+- Resume tailoring per job
+- Score recalculation after tailoring
+- Previous Job + Next Job navigation
 - Sidebar navigation — top navbar only
 - Separate analytics page — charts live on dashboard
 - Live browser embed on dashboard
@@ -234,20 +202,16 @@ Full width layout on all pages. No sidebar.
 - Multiple saved resume versions — one active resume per user at a time
 - Payment or subscription system
 - Browser extension
-- Job board integrations beyond LinkedIn and URL input
 
 ---
 
 ## PostHog Events
 
 ```typescript
-job_search_started; // { jobTitle, location }
-job_found; // { source, matchScore }
-job_url_submitted; // { url }
-cover_letter_generated; // { jobId }
-resume_tailored; // { jobId, scoreBefore, scoreAfter }
+job_search_started; // { userId, jobTitle, location }
+job_found; // { userId, source, matchScore }
 profile_completed; // { userId }
-linkedin_connected; // { userId }
+company_researched; // { userId, jobId, company }
 ```
 
 ---
@@ -258,8 +222,8 @@ A developer or technical job seeker who:
 
 - Is actively applying to jobs
 - Has an existing resume they want to use
-- Wants to eliminate the repetitive preparation work of job applications
 - Wants intelligent job matching based on their actual skills
+- Wants to research companies quickly before applying
 - Is comfortable with a modern web application
 
 ---
@@ -267,12 +231,11 @@ A developer or technical job seeker who:
 ## Success Criteria
 
 - User can sign up, fill profile, upload resume, and start finding jobs in under 5 minutes
-- LinkedIn job discovery works correctly when account is connected
-- URL input correctly extracts and scores any valid job posting URL
+- Adzuna job discovery returns relevant tech jobs for any title and location search
 - GPT-4o match scores feel accurate and the reasoning makes sense
-- Tailored resume is visibly different from base resume and relevant to the specific job
-- Score comparison after tailoring shows meaningful improvement
-- Job details page displays clean structured job information regardless of source
+- Company Research Agent returns a useful dossier for well-known tech companies
+- Company Research Agent gracefully handles companies with minimal web presence
+- Job details page displays clean structured job information
 - Dashboard analytics charts show meaningful data after several searches
 - All job data stored correctly in InsForge with full structured fields
 - PostHog events fire correctly for all key user actions

@@ -43,6 +43,7 @@ InsForge authentication — Google and GitHub OAuth.
 - OAuth callback handler
 - Session management
 - Middleware protecting /dashboard, /profile, /find-jobs, /find-jobs/[id]
+- After login → redirect to /dashboard
 
 ---
 
@@ -68,7 +69,10 @@ All InsForge tables and storage bucket created before any data is written.
 
 - Create `profiles` table with all columns from architecture.md
 - Create `agent_runs` table
-- Create `jobs` table with all columns including tailored fields
+- Create `jobs` table with all columns including:
+  - tailored fields
+  - company_research jsonb column
+  - source values: 'search' | 'url'
 - Create `agent_logs` table
 - Create `resumes` storage bucket with authenticated access only
 - Row level security policies on all four tables — always filter by user_id
@@ -84,7 +88,6 @@ Build the complete profile page UI with mock data. No save logic yet.
 **UI:**
 
 - Profile needs attention banner at top — completion percentage ring, missing field tags highlighted (e.g. PHONE, LOCATION, EDUCATION)
-- Connected Accounts section — LinkedIn row with "Not connected" status and Connect LinkedIn button
 - Resume section — drag and drop upload area, "Click to upload or drag and drop" text, PDF only note, Select Resume button, Generate Resume from Profile button below
 - Profile Information form with clearly labeled sections:
   - Personal Info — Full Name, Email (pre-filled, not editable), Phone Number, Location, LinkedIn URL, Portfolio/GitHub, Work Authorization dropdown
@@ -135,8 +138,7 @@ Extract from Resume button — GPT-4o reads uploaded PDF and auto-fills profile 
 
 ### 08 Resume PDF Generation from Profile
 
-Generate a clean professional PDF resume from current profile data 
-using GPT-4o.
+Generate a clean professional PDF resume from current profile data using GPT-4o.
 
 **Logic:**
 
@@ -146,58 +148,15 @@ using GPT-4o.
   - Professional summary paragraph
   - Polished work experience bullet points
   - Clean professional language throughout
-- @react-pdf/renderer renders clean single-page PDF from profile fields
-- renderToBuffer() used — never write to disk
+- @react-pdf/renderer renders GPT-4o output into clean single-page PDF using renderToBuffer()
 - Buffer uploaded to InsForge Storage at resumes/{user_id}/resume.pdf with upsert: true
 - resume_pdf_url updated in profiles table
 
 ---
 
-### 09 LinkedIn Connection via Browserbase Context
-
-User connects LinkedIn account once. Agent reuses this session for all future job searches.
-
-**UI (on Profile page — Connected Accounts section):**
-
-- Connect LinkedIn button
-- Clicking opens LinkedIn login page in a new browser tab (Browserbase live view URL)
-- After user logs in manually they return to the app
-- "I'm Connected" button appears
-- Clicking saves the context and updates status to LinkedIn Connected ✅
-- Disconnect option shown after connecting
-
-**Logic:**
-
-- POST /api/linkedin/connect:
-  - Creates Browserbase Context: bb.contexts.create({ projectId })
-  - Creates Browserbase session using that context with persist: true
-  - Gets live view URL: bb.sessions.debug(session.id) → debuggerFullscreenUrl
-  - Returns contextId and liveViewUrl to client
-- Client opens liveViewUrl in new tab
-- POST /api/linkedin/save-context:
-  - Receives contextId from client
-  - Saves to profiles.linkedin_context_id
-  - Sets profiles.linkedin_connected to true
-
----
-
-### 10 Smart Redirect + Profile Completion Check
-
-Route users to the right page based on profile completion.
-
-**Logic:**
-
-- On login — check profiles.is_complete for current user
-- is_complete false or profile row missing → redirect to /profile
-- is_complete true → redirect to /dashboard
-- Dashboard reads profiles.is_complete — if false shows incomplete profile banner with link to /profile
-- Banner disappears once is_complete is true
-
----
-
 ## Phase 3 — Find Jobs Page
 
-### 11 Find Jobs Page — Full UI
+### 09 Find Jobs Page — Full UI
 
 Build the complete Find Jobs page UI with mock data. No logic yet.
 
@@ -207,89 +166,44 @@ Build the complete Find Jobs page UI with mock data. No logic yet.
   - JOB TITLE label + input with search icon placeholder "Frontend Engineer"
   - LOCATION label + input placeholder "Remote, New York..."
   - Find Jobs button with search icon
-  - IMPORT BY URL label + full-width URL input placeholder "https://jobs.company.com/..."
-  - Import Job button
   - Success message area below controls — green banner: "Found 8 jobs and saved 4 strong matches."
 - Job list section below:
   - Filter bar: text search input "Filter by company or role...", All Matches dropdown, Match Score sort dropdown
-  - Jobs table with columns: COMPANY, ROLE, MATCH SCORE (color coded progress bar + percentage), SALARY EST., SOURCE (LinkedIn/URL badge), DATE FOUND
-  - Tailored badge next to role name for tailored jobs
+  - Jobs table with columns: COMPANY, ROLE, MATCH SCORE (color coded progress bar + percentage), SALARY EST., SOURCE (Search/URL badge), DATE FOUND
   - Pagination — "Showing 1 to 6 of 24 results", Previous, page numbers, Next
 
 ---
 
-### 12 LinkedIn Browsing + Dual Extraction
+### 10 Adzuna Job Discovery
 
-Agent opens LinkedIn with saved context and extracts job listings using two strategies merged together.
+Agent calls Adzuna API to find jobs matching user's search criteria, scores them against user profile, saves to DB.
 
 **Logic:**
 
 - POST /api/agent/find receives jobTitle and location from client
-- Load linkedin_context_id from profiles table — if missing return error: "Connect LinkedIn before finding jobs"
-- Create Stagehand session via createStagehandSession:
-  - contextId: profile.linkedin_context_id
-  - persistContext: true — keeps cookies fresh after each run
-  - timeout: 600 — 10 minute session
-- Navigate to: https://www.linkedin.com/jobs/search/?keywords={jobTitle}&location={location}
-- Auth check — if page URL contains 'login' or 'authwall' → context expired → return error: "LinkedIn session expired. Please reconnect."
-- Dual extraction on search results page:
-  - DOM scraping via page.evaluate() — walks [data-job-id] and a[href*="/jobs/view/"] elements to extract title, company, location, LinkedIn job URL without any LLM call → extractDomLinkedInJobs()
-  - Stagehand LLM extract with Zod schema — GPT-4o Vision extracts up to 10 jobs including title, company, location, description snippets → stagehand.extract()
-  - mergeJobs() — DOM results anchor the URLs, LLM results enrich apply mode and descriptions
-  - Deduplicate merged results by title|company|location key
-- Create agent_run record in DB, save run ID
-
----
-
-### 13 LinkedIn Detail Page Enrichment + Description Cleaning
-
-For each merged job listing — visit its LinkedIn page, detect apply mode, extract and clean full description, save to DB.
-
-**Logic:**
-
-- For each merged job:
-  - Navigate to the individual LinkedIn job URL
-  - Extract full raw job description from .jobs-description\_\_content or #job-details selectors
-- GPT-4o cleans each raw description:
-  - Strips LinkedIn chrome — premium upsells, "Use AI to assess this job", language selectors, "See who you know" sections
-  - Restructures into clean fields: aboutRole, responsibilities[], requirements[], niceToHave[], benefits[], aboutCompany
-- GPT-4o scores each job against user profile:
-  - matchScore — integer 0-100
-  - matchReason — one paragraph explanation
-  - matchedSkills — skills user has that job requires
-  - missingSkills — skills job requires that user lacks
-- Save complete job record to jobs table — all structured fields + match fields + source: 'linkedin' + run_id
-- Write entry to agent_logs for each job processed
+- Call Adzuna API:
+  - GET https://api.adzuna.com/v1/api/jobs/{country}/search/1
+  - params: what={jobTitle}, where={location}, results_per_page=10, app_id, app_key
+  - Detect country from location input — default to 'us'
+- For each job returned:
+  - Extract title, company, location, salary, description snippet, redirect_url
+  - GPT-4o scores job against user profile:
+    - matchScore — integer 0-100
+    - matchReason — one paragraph explanation
+    - matchedSkills — skills user has that job requires
+    - missingSkills — skills job requires that user lacks
+  - Save complete record to jobs table:
+    - source: 'search'
+    - run_id from agent_runs record
+    - All structured fields saved
+- Create agent_run record in DB
 - After all jobs saved — update agent_run with total count, return success message to frontend
 
 **PostHog events:** `job_search_started`, `job_found`
 
 ---
 
-### 14 URL Input — Fetch + Extract + Score + Save
-
-User pastes any job URL. Agent fetches, structures, scores, and saves complete record.
-
-**Logic:**
-
-- POST /api/agent/fetch-url receives jobUrl from client
-- Browserbase Fetch API retrieves raw page content from the URL
-- GPT-4o reads raw content and extracts structured job data:
-  - title, company, location, salary, jobType
-  - aboutRole, responsibilities[], requirements[], niceToHave[], benefits[], aboutCompany
-  - externalApplyUrl — same as input URL or more direct URL if found
-- GPT-4o scores job against user profile:
-  - matchScore, matchReason, matchedSkills[], missingSkills[]
-- Save complete record to jobs table:
-  - source: 'url'
-  - run_id: null — URL imports are never part of an agent run
-  - All structured description and match fields saved
-
-**PostHog event:** `job_url_submitted`
-
----
-
-### 15 Filter + Sort + Pagination
+### 11 Filter + Sort + Pagination
 
 Wire filter tabs, sort dropdown, text search, and pagination to real InsForge DB data.
 
@@ -308,138 +222,187 @@ Wire filter tabs, sort dropdown, text search, and pagination to real InsForge DB
 
 ## Phase 4 — Job Details Page
 
-### 16 Job Details Page — Full UI
+### 12 Job Details Page — Full UI
 
-Build the complete job details page UI. Job data from DB is already available from Phase 3 — wire real data for all job info, match, and description sections immediately. Cover letter and resume sections show empty state only.
+Build the complete job details page UI. Job data from DB is already available from Phase 3 — wire real data for all job info and match sections immediately. Company research section shows empty state only.
 
 **UI:**
 
 - Back to Jobs link
-- Job header — company logo placeholder, job title, company name, match score badge with percentage, View Job Post button (links to externalApplyUrl)
+- Job header — company logo placeholder, job title, company name, match score badge with percentage, View Job Post button (links to redirect_url)
 - Info cards row — Salary Est., Location, Job Type, Date Found
 - AI Match Reasoning section — match reason paragraph from GPT-4o
 - Required Skills vs Your Profile — matched skills as green badges, missing skills as red/orange badges
-- Job Description section — About the Role, Responsibilities (bullet list), Requirements (bullet list), Nice to Have (bullet list, hidden if empty), Benefits (bullet list, hidden if empty), About the Company
-- Targeted Cover Letter card — empty state with Generate Cover Letter button (cover letter text, Copy Text, Regenerate shown after generation)
-- Tailored Resume card — empty state with Tailor Resume button (filename, Download, Regenerate, score comparison, Recalculate Score shown after tailoring)
-- Apply Now button (links to externalApplyUrl, opens in new tab) + Next Job button
+- Job Description section — description content from Adzuna
+- Company Research card — empty state with Research Company button. After research: structured dossier with company overview, tech stack, culture, why this role, interview prep
+- Apply Now button (links to redirect_url, opens in new tab)
 
 ---
 
-### 17 Cover Letter Generation
+# Feature 13 — Company Research Agent (Updated)
 
-GPT-4o generates personalized cover letter for this specific job.
-
-**UI:**
-
-- Generate Cover Letter button in empty state card
-- Loading state while generating
-- Cover letter text appears in card after generation
-- Copy Text button — copies cover letter to clipboard
-- Regenerate button — generates new version
+Agent researches the company using their public website and builds a structured dossier using a single Browserbase session. Three data sources fused together: company website content, job description from DB, user profile from DB.
 
 **Logic:**
 
-- POST /api/cover-letter/generate receives jobId
-- Loads job description and user profile from DB
-- GPT-4o generates cover letter using job description + profile fields + cover_letter_tone preference from profile
-- Cover letter saved to jobs.cover_letter
+- POST /api/agent/research receives jobId
+- Load job data from DB — extract company_name, job description, matched_skills, missing_skills
+- Load user profile from DB — skills, experience, work history
+- Derive company homepage URL by following the Adzuna redirect with server-side fetch() — no browser needed for this step:
+  - fetch(redirect_url, { redirect: "follow" }) follows HTTP redirects natively before the browser opens
+  - Use response.url as the real employer job page URL
+  - Strip subdomain from response.url hostname (e.g. jobs.stripe.com → stripe.com)
+  - Construct homepage URL as https://{rootDomain}
+  - If response.url still contains "adzuna.com" or fetch throws — fall back to https://www.{company}.com (company name from DB)
+  - If Stagehand gets no meaningful content (oneLiner and productSummary empty) — skip browser research entirely, proceed to GPT-4o synthesis with job description and profile only
+- Open single Browserbase session with Stagehand
+  **Stagehand homepage extraction:**
 
-**PostHog event:** `cover_letter_generated`
+```typescript
+const homepage = await stagehand.extract({
+  instruction:
+    "This is a company's homepage. Capture what the company actually does, who it's for, and any concrete signals (funding, customers, scale, mission, recent launches). Then find the internal links most worth visiting to research them as an employer.",
+  schema: z.object({
+    oneLiner: z.string().describe("What the company does in one sentence"),
+    productSummary: z
+      .string()
+      .describe("What they build/sell and who it's for"),
+    signals: z
+      .array(z.string())
+      .describe("Funding, notable customers, scale, mission, recent news"),
+    pageLinks: z
+      .array(
+        z.object({
+          url: z.string(),
+          kind: z.enum([
+            "about",
+            "careers",
+            "blog",
+            "engineering",
+            "product",
+            "team",
+            "other",
+          ]),
+        }),
+      )
+      .describe("Internal links worth visiting"),
+  }),
+});
+```
+
+If oneLiner and productSummary are empty — bail to synthesis with job description and profile only.
+
+**Stagehand sub-page extraction (max 3 pages — prefer about/blog/engineering/product over careers):**
+
+```typescript
+const page = await stagehand.extract({
+  instruction:
+    "Extract substance that helps a candidate understand this company before applying: what they do, their values and how they work, the specific technologies and tools they use, notable projects or customers, and how the team operates. Ignore nav, footers, cookie banners, and generic marketing copy.",
+  schema: z.object({
+    keyPoints: z.array(z.string()),
+    technologies: z
+      .array(z.string())
+      .describe("Specific languages, frameworks, tools, platforms"),
+    valuesOrCulture: z
+      .array(z.string())
+      .describe("Stated values, working style, team norms"),
+    notable: z
+      .array(z.string())
+      .describe("Customers, funding, scale, projects, awards"),
+  }),
+});
+```
+
+- Close Browserbase session after homepage + max 3 sub-pages
+  **GPT-4o synthesis (runs after browser closes):**
+
+System prompt:
+
+```
+You are a sharp career strategist preparing a candidate to apply for a specific role.
+You are given (a) research collected from the company's own website, (b) the job posting,
+and (c) the candidate's profile. Produce a concise, concrete briefing that gives this
+specific candidate an edge for this specific role.
+
+Rules:
+- Ground every company claim in the provided research or job posting. Never invent
+  funding, customers, headcount, or facts. If research was thin, infer carefully from
+  the job posting and say what's inferred.
+- Be specific to THIS candidate. Connect their actual skills and past work to this
+  company's stack, product, and values. No generic advice that would apply to anyone.
+- Turn the candidate's missing skills into a strategy: how to frame the gap honestly
+  and what adjacent experience to lean on.
+- Talking points and questions must reference real things from the research, the kind
+  of detail that signals the candidate did their homework.
+- Keep every item tight: one or two sentences. No fluff.
+
+Return ONLY valid JSON.
+```
+
+User prompt feeds three data sources:
+
+```
+COMPANY RESEARCH (from their website): {companyResearch}
+JOB POSTING: title, company, description, matched_skills, missing_skills
+CANDIDATE PROFILE: current_title, years_experience, experience_level, skills, work_experience
+```
+
+Temperature: 0.4
+
+**Dossier shape saved to jobs.company_research jsonb:**
+
+```json
+{
+  "companyOverview": "string",
+  "techStack": ["string"],
+  "culture": ["string"],
+  "whyThisRole": "string",
+  "yourEdge": ["string"],
+  "gapsToAddress": ["string"],
+  "smartQuestions": ["string"],
+  "interviewPrep": ["string"],
+  "sources": ["string"]
+}
+```
+
+- Save complete dossier to jobs.company_research jsonb column
+- Always return a dossier — never fail silently. If browser research failed, GPT-4o synthesizes from job description and profile alone.
+  **PostHog event:** `company_researched` — { userId, jobId, company }
 
 ---
 
-### 18 Resume Tailoring — GPT-4o Rewrite
+## Job Details UI — Company Research Card (Updated)
 
-Warning modal + GPT-4o rewrites resume content specifically for this job.
+The Company Research card on the job details page must render all 9 fields:
 
-**UI:**
-
-- Tailor Resume button in empty state card
-- Warning modal on click: "This will replace your current resume PDF. Your profile data will not change." with Confirm and Cancel buttons
-- Loading state after confirm — "Tailoring your resume..."
-
-**Logic:**
-
-- User confirms warning modal
-- POST /api/resume/tailor receives jobId
-- Loads user profile + job description from DB
-- GPT-4o rewrites resume content to emphasize skills matching job requirements
-- Returns structured tailored resume content — same shape as profile fields but reworded for this job
-- Tailored content stored temporarily — PDF generation happens in next feature
-- jobs.is_tailored set to true
-
----
-
-### 19 Tailored Resume PDF Generation + Storage
-
-Generate PDF from tailored content, delete old tailored PDF if exists, upload new one.
-
-**Logic:**
-
-- Receives tailored resume content from feature 18
-- Check jobs.tailored_resume_url for this job:
-  - If exists — delete old file from InsForge Storage at that path before uploading
-- @react-pdf/renderer renders new PDF from tailored content using renderToBuffer()
-- Buffer uploaded to InsForge Storage at resumes/{user_id}/{job_id}-tailored.pdf with upsert: false (file was deleted, fresh upload)
-- jobs.tailored_resume_url updated with new storage URL
-
----
-
-### 20 Score Recalculation + Comparison Display
-
-Recalculate match score using tailored resume content, update DB, show comparison.
-
-**UI:**
-
-- Score comparison appears: "Original: 72% → Tailored: 91%"
-- Tailored Resume card updates — shows filename, Download button, Regenerate button
-- Recalculate Score button — triggers recalculation if user wants to run again
-
-**Logic:**
-
-- GPT-4o rescores job using tailored resume content instead of main profile
-- jobs.tailored_match_score updated with new score
-- Score comparison calculated: original jobs.match_score vs new jobs.tailored_match_score
-- Comparison displayed in UI
-
-**PostHog event:** `resume_tailored`
-
----
-
-### 21 Previous Job + Next Job Navigation
-
-Navigate between jobs directly from the job details page without going back to the list.
-
-**Logic:**
-
-- Jobs ordered by found_at descending — newest first
-- Next Job button — fetches the next job ID in the ordered list for current user
-- Previous Job button — fetches the previous job ID in the ordered list
-- Navigate to /find-jobs/[nextJobId] or /find-jobs/[prevJobId]
-- Next Job button disabled on the most recent job
-- Previous Job button disabled on the oldest job
-
----
+- **Company Overview** — paragraph
+- **Tech Stack** — tag list
+- **Culture** — bullet list
+- **Why This Role** — paragraph
+- **Your Edge** — bullet list (highlight — specific to this candidate)
+- **Gaps to Address** — bullet list (reframed as strategy, not weaknesses)
+- **Smart Questions** — bullet list (questions to ask in interview)
+- **Interview Prep** — bullet list
+- **Sources** — small text, links to pages researched
 
 ## Phase 5 — Dashboard
 
-### 22 Dashboard Page — Full UI
+### 14 Dashboard Page — Full UI
 
 Build the complete dashboard UI with mock data.
 
 **UI:**
 
-- Four stat cards: Total Jobs Found, Avg. Match Rate, Resumes Tailored, Cover Letters Generated — all showing mock numbers with trend indicators
+- Four stat cards: Total Jobs Found, Avg. Match Rate, Companies Researched, Jobs This Week — all showing mock numbers with trend indicators
 - Recent Activity card — list of 5 activity entries with colored dots and timestamps
-- Resume Tailoring Activity — bar chart (mock data, days of week)
+- Company Research Activity— bar chart (mock data, days of week)
 - Jobs Found Over Time — line chart (mock data, days of week)
 - Match Score Distribution — bar chart (mock data, score ranges 50-60%, 60-70%, 70-80%, 80-90%, 90-100%)
 - Incomplete profile banner at top if profile not complete
 
 ---
 
-### 23 Stats Bar — Real Data
+### 15 Stats Bar — Real Data
 
 Wire four stat cards to real InsForge DB data for current user.
 
@@ -447,29 +410,28 @@ Wire four stat cards to real InsForge DB data for current user.
 
 - Total Jobs Found — COUNT of jobs where user_id = current user
 - Avg. Match Rate — AVG of match_score across all user jobs
-- Resumes Tailored — COUNT of jobs where is_tailored = true and user_id = current user
-- Cover Letters Generated — COUNT of jobs where cover_letter IS NOT NULL and user_id = current user
+- Companies Researched — COUNT of jobs where company_research IS NOT NULL and user_id = current user
+- Jobs This Week — COUNT of jobs found in last 7 days
 
 ---
 
-### 24 Recent Activity — Real Data
+### 16 Recent Activity — Real Data
 
 Wire recent activity list to real InsForge DB data for current user.
 
 **Logic:**
 
 - Query agent_runs table — most recent runs for current user
-- Query jobs table — most recent tailored and cover letter entries for current user
+- Query jobs table — most recent company research entries for current user
 - Merge and sort all by created_at descending — take last 5-10 entries
 - Format each into human readable string:
   - agent_run completed → "Found X jobs for [jobTitle] — [time ago]"
-  - is_tailored set to true → "Tailored resume for [title] at [company] — [time ago]"
-  - cover_letter populated → "Generated cover letter for [title] at [company] — [time ago]"
-- Color coded dot per entry type — info blue, success green, action purple
+  - company_research populated → "Researched [company] — [time ago]"
+- Color coded dot per entry type — info blue, success green
 
 ---
 
-### 25 Analytics Charts — PostHog Data
+### 17 Analytics Charts — PostHog Data
 
 Wire three dashboard charts to real PostHog event data for current user.
 
@@ -477,7 +439,7 @@ Wire three dashboard charts to real PostHog event data for current user.
 
 - Jobs Found Over Time — query PostHog for job_found events where distinctId = current userId, last 30 days, group by day
 - Match Score Distribution — query PostHog for job_found events, extract matchScore property, group into ranges: 50-60, 60-70, 70-80, 80-90, 90-100
-- Resume Tailoring Activity — query PostHog for resume_tailored events where distinctId = current userId, last 7 days, group by day
+- Company Research Activity — query PostHog for company_researched events where distinctId = current userId, last 7 days, group by day
 - All three charts rendered with recharts
 - Empty state shown for each chart when no data exists yet
 
@@ -488,8 +450,8 @@ Wire three dashboard charts to real PostHog event data for current user.
 | Phase                 | Features |
 | --------------------- | -------- |
 | Phase 1 — Foundation  | 4        |
-| Phase 2 — Profile     | 6        |
-| Phase 3 — Find Jobs   | 5        |
-| Phase 4 — Job Details | 6        |
+| Phase 2 — Profile     | 4        |
+| Phase 3 — Find Jobs   | 3        |
+| Phase 4 — Job Details | 2        |
 | Phase 5 — Dashboard   | 4        |
-| **Total**             | **25**   |
+| **Total**             | **17**   |

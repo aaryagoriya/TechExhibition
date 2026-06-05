@@ -2,12 +2,23 @@ import React from "react";
 import { NextRequest, NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import OpenAI from "openai";
-import { renderToBuffer } from "@react-pdf/renderer";
+import { renderToBuffer, type DocumentProps } from "@react-pdf/renderer";
 
 import { getCurrentUser } from "@/lib/auth";
 import { createInsforgeServer } from "@/lib/insforge-server";
 import type { Profile } from "@/types";
 import { ResumePDF, type GeneratedContent } from "./ResumePDF";
+
+function createResumeDocument(
+  profile: Profile,
+  generated: GeneratedContent,
+): React.ReactElement<DocumentProps> {
+  // ResumePDF renders a @react-pdf <Document>; the cast bridges React's component
+  // prop inference to the renderer's document element type.
+  return (
+    <ResumePDF profile={profile} generated={generated} />
+  ) as unknown as React.ReactElement<DocumentProps>;
+}
 
 export async function POST(_req: NextRequest): Promise<NextResponse> {
   try {
@@ -103,9 +114,7 @@ ${profileContext}`,
     }
 
     // Render PDF buffer server-side
-    const buffer = await renderToBuffer(
-      <ResumePDF profile={profile} generated={generated} />,
-    );
+    const buffer = await renderToBuffer(createResumeDocument(profile, generated));
 
     // Remove existing file then upload fresh (SDK has no upsert — matches actions/profile.ts pattern)
     const path = `${user.id}/resume.pdf`;

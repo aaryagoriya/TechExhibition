@@ -2,17 +2,18 @@
 
 ## Stack
 
-| Layer                          | Tool                     | Purpose                                               |
-| ------------------------------ | ------------------------ | ----------------------------------------------------- |
-| Framework                      | Next.js 16 (App Router)  | Full stack framework                                  |
-| Auth + DB + Storage + Realtime | InsForge                 | Entire backend                                        |
-| Cloud browser                  | Browserbase              | LinkedIn browsing + Fetch API for URL input           |
-| AI browser control             | Stagehand                | LinkedIn page interaction and extraction              |
-| AI model                       | OpenAI GPT-4o            | Matching, cover letters, resume tailoring, extraction |
-| Analytics                      | PostHog                  | Event tracking and dashboard charts                   |
-| PDF generation                 | @react-pdf/renderer      | Resume PDF rendering                                  |
-| Styling                        | Tailwind CSS + shadcn/ui | UI components and styling                             |
-| Language                       | TypeScript strict        | Throughout                                            |
+| Layer                          | Tool                     | Purpose                                          |
+| ------------------------------ | ------------------------ | ------------------------------------------------ |
+| Framework                      | Next.js 16 (App Router)  | Full stack framework                             |
+| Auth + DB + Storage + Realtime | InsForge                 | Entire backend                                   |
+| Cloud browser                  | Browserbase              | Company research — browsing company public pages |
+| AI browser control             | Stagehand                | Company page interaction and content extraction  |
+| Job Discovery                  | Adzuna API               | Job search and discovery                         |
+| AI model                       | OpenAI GPT-4o            | Matching, research synthesis, extraction         |
+| Analytics                      | PostHog                  | Event tracking and dashboard charts              |
+| PDF generation                 | @react-pdf/renderer      | Resume PDF rendering                             |
+| Styling                        | Tailwind CSS + shadcn/ui | UI components and styling                        |
+| Language                       | TypeScript strict        | Throughout                                       |
 
 ---
 
@@ -49,23 +50,16 @@
 │   │       └── page.tsx                   → Individual job details page
 │   └── api/
 │       ├── agent/
-│       │   ├── find/route.ts              → Trigger LinkedIn job discovery
-│       │   └── fetch-url/route.ts         → Fetch and score a single job URL
-│       ├── linkedin/
-│       │   ├── connect/route.ts           → Create Browserbase Context + return live view URL
-│       │   └── save-context/route.ts      → Save context ID to profiles table
+│       │   ├── find/route.ts              → Trigger Adzuna job discovery
+│       │   └── research/route.ts          → Trigger company research agent
 │       ├── resume/
 │       │   ├── generate/route.ts          → Generate base resume PDF from profile
-│       │   ├── extract/route.ts           → Extract profile data from uploaded resume PDF
-│       │   └── tailor/route.ts            → Generate tailored resume PDF for specific job
-│       └── cover-letter/
-│           └── generate/route.ts          → Generate cover letter for a job
+│       │   └── extract/route.ts           → Extract profile data from uploaded resume PDF
 ├── agent/
-│   ├── linkedin.ts                        → LinkedIn browsing + dual extraction + detail enrichment
+│   ├── adzuna.ts                          → Adzuna API job discovery + GPT-4o scoring
+│   ├── research.ts                        → Company research — Browserbase + Stagehand + GPT-4o
 │   ├── matcher.ts                         → GPT-4o job matching logic
 │   ├── extractor.ts                       → GPT-4o job description extraction + structuring
-│   ├── cover-letter.ts                    → GPT-4o cover letter generation
-│   ├── resume.ts                          → Resume tailoring + PDF generation
 │   └── types.ts                           → Agent-specific TypeScript types
 ├── actions/
 │   ├── profile.ts                         → Profile save + update
@@ -87,11 +81,9 @@
 │   │   ├── ProfileForm.tsx
 │   │   ├── ResumeUpload.tsx
 │   │   ├── ResumePreview.tsx
-│   │   ├── ConnectedAccounts.tsx
 │   │   └── CompletionIndicator.tsx
 │   ├── find-jobs/
 │   │   ├── SearchControls.tsx
-│   │   ├── UrlInput.tsx
 │   │   ├── JobsTable.tsx
 │   │   ├── JobFilters.tsx
 │   │   └── JobsPagination.tsx
@@ -99,14 +91,14 @@
 │       ├── JobInfo.tsx
 │       ├── MatchScore.tsx
 │       ├── JobDescription.tsx
-│       ├── ResumeSection.tsx
-│       ├── CoverLetter.tsx
+│       ├── CompanyResearch.tsx
 │       └── JobActions.tsx
 ├── lib/
 │   ├── insforge-client.ts                 → InsForge browser client instance
 │   ├── insforge-server.ts                 → InsForge server client
 │   ├── browserbase.ts                     → Browserbase session creation + management
 │   ├── stagehand.ts                       → Stagehand initialisation with Browserbase session
+│   ├── adzuna.ts                          → Adzuna API client
 │   ├── posthog-client.ts                  → PostHog browser client
 │   ├── posthog-server.ts                  → PostHog server client
 │   └── utils.ts                           → Shared utility functions
@@ -118,14 +110,14 @@
 
 ## System Boundaries
 
-| Folder        | Owns                                                                                                                  |
-| ------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `app/`        | Pages and API routes only. No business logic.                                                                         |
-| `agent/`      | All agent logic. LinkedIn browsing, matching, extraction, cover letter, resume tailoring. Nothing here touches React. |
-| `actions/`    | Server Actions for UI-triggered mutations only. Profile save, profile update.                                         |
-| `components/` | UI only. No data fetching logic. No direct DB calls.                                                                  |
-| `lib/`        | Third party client initialisation and shared utilities only.                                                          |
-| `types/`      | TypeScript types shared across the project.                                                                           |
+| Folder        | Owns                                                                                                   |
+| ------------- | ------------------------------------------------------------------------------------------------------ |
+| `app/`        | Pages and API routes only. No business logic.                                                          |
+| `agent/`      | All agent logic. Adzuna discovery, company research, matching, extraction. Nothing here touches React. |
+| `actions/`    | Server Actions for UI-triggered mutations only. Profile save, profile update.                          |
+| `components/` | UI only. No data fetching logic. No direct DB calls.                                                   |
+| `lib/`        | Third party client initialisation and shared utilities only.                                           |
+| `types/`      | TypeScript types shared across the project.                                                            |
 
 ---
 
@@ -146,13 +138,37 @@ Revalidate or redirect
 ### Agent Operations (API Routes)
 
 ```
-User clicks Find Jobs or submits URL
+User clicks Find Jobs
         ↓
-API route in app/api/agent/
+API route in app/api/agent/find
         ↓
-Calls agent/ functions
+Calls agent/adzuna.ts
+        ↓
+Adzuna API returns job listings
+        ↓
+GPT-4o scores each job against user profile
         ↓
 Agent writes results to InsForge DB
+        ↓
+Page data revalidated
+```
+
+### Company Research (API Routes)
+
+```
+User clicks Research Company on job details page
+        ↓
+API route in app/api/agent/research
+        ↓
+Calls agent/research.ts
+        ↓
+Single Browserbase session opens with Stagehand
+        ↓
+Navigates to company homepage + sub pages
+        ↓
+GPT-4o synthesizes dossier from extracted content
+        ↓
+Dossier saved to jobs.company_research
         ↓
 Page data revalidated
 ```
@@ -160,7 +176,7 @@ Page data revalidated
 ### Resume Operations (API Routes)
 
 ```
-User uploads resume or clicks Generate/Tailor
+User uploads resume or clicks Generate
         ↓
 API route in app/api/resume/
         ↓
@@ -168,30 +184,9 @@ GPT-4o processes content
         ↓
 @react-pdf/renderer renders PDF buffer
         ↓
-Old tailored PDF deleted from storage if exists (tailor only)
-        ↓
 New PDF uploaded to InsForge Storage
         ↓
-URL saved to profiles or jobs table
-```
-
-### LinkedIn Connection
-
-```
-User clicks Connect LinkedIn
-        ↓
-POST /api/linkedin/connect
-        ↓
-Browserbase Context created
-        ↓
-Live view URL returned — opens in new tab
-        ↓
-User logs in manually
-        ↓
-POST /api/linkedin/save-context
-        ↓
-context ID saved to profiles.linkedin_context_id
-profiles.linkedin_connected set to true
+URL saved to profiles table
 ```
 
 ---
@@ -223,8 +218,6 @@ profiles.linkedin_connected set to true
 | portfolio_url       | text        |                                              |
 | work_authorization  | text        | citizen / permanent_resident / visa_required |
 | resume_pdf_url      | text        | InsForge Storage URL of current resume       |
-| linkedin_context_id | text        | Browserbase Context ID for LinkedIn session  |
-| linkedin_connected  | boolean     | True when LinkedIn context is saved          |
 | is_complete         | boolean     | True when all required fields filled         |
 | created_at          | timestamptz |                                              |
 | updated_at          | timestamptz |                                              |
@@ -244,34 +237,31 @@ profiles.linkedin_connected set to true
 
 ### `jobs`
 
-| Column               | Type        | Notes                                                |
-| -------------------- | ----------- | ---------------------------------------------------- |
-| id                   | uuid        |                                                      |
-| run_id               | uuid        | References agent_runs — null if from URL input       |
-| user_id              | uuid        | References profiles                                  |
-| source               | text        | linkedin / url                                       |
-| source_url           | text        | Original job listing URL                             |
-| external_apply_url   | text        | Direct company apply URL                             |
-| title                | text        |                                                      |
-| company              | text        |                                                      |
-| location             | text        |                                                      |
-| salary               | text        | If available                                         |
-| job_type             | text        | fulltime / parttime / contract                       |
-| about_role           | text        | 2-3 sentence summary                                 |
-| responsibilities     | text[]      | Bullet points                                        |
-| requirements         | text[]      | Bullet points                                        |
-| nice_to_have         | text[]      | Optional                                             |
-| benefits             | text[]      | Optional                                             |
-| about_company        | text        | Brief company description                            |
-| match_score          | integer     | 0-100 scored against main profile                    |
-| match_reason         | text        | GPT-4o explanation                                   |
-| matched_skills       | text[]      | Skills user has that match                           |
-| missing_skills       | text[]      | Skills user lacks                                    |
-| cover_letter         | text        | Generated cover letter                               |
-| tailored_resume_url  | text        | InsForge Storage URL of tailored resume for this job |
-| tailored_match_score | integer     | Score after tailoring                                |
-| is_tailored          | boolean     | Default false                                        |
-| found_at             | timestamptz |                                                      |
+| Column             | Type        | Notes                                          |
+| ------------------ | ----------- | ---------------------------------------------- |
+| id                 | uuid        |                                                |
+| run_id             | uuid        | References agent_runs — null if from URL input |
+| user_id            | uuid        | References profiles                            |
+| source             | text        | search / url                                   |
+| source_url         | text        | Original job listing URL                       |
+| external_apply_url | text        | Direct company apply URL                       |
+| title              | text        |                                                |
+| company            | text        |                                                |
+| location           | text        |                                                |
+| salary             | text        | If available                                   |
+| job_type           | text        | fulltime / parttime / contract                 |
+| about_role         | text        | 2-3 sentence summary                           |
+| responsibilities   | text[]      | Bullet points                                  |
+| requirements       | text[]      | Bullet points                                  |
+| nice_to_have       | text[]      | Optional                                       |
+| benefits           | text[]      | Optional                                       |
+| about_company      | text        | Brief company description                      |
+| match_score        | integer     | 0-100 scored against main profile              |
+| match_reason       | text        | GPT-4o explanation                             |
+| matched_skills     | text[]      | Skills user has that match                     |
+| missing_skills     | text[]      | Skills user lacks                              |
+| company_research   | jsonb       | Company dossier from research agent            |
+| found_at           | timestamptz |                                                |
 
 ### `agent_logs`
 
@@ -289,14 +279,11 @@ profiles.linkedin_connected set to true
 
 ## InsForge Storage
 
-| Bucket  | Path                                    | Contents                         |
-| ------- | --------------------------------------- | -------------------------------- |
-| resumes | resumes/{user_id}/resume.pdf            | Current active resume PDF        |
-| resumes | resumes/{user_id}/{job_id}-tailored.pdf | Tailored resume for specific job |
+| Bucket  | Path                         | Contents                  |
+| ------- | ---------------------------- | ------------------------- |
+| resumes | resumes/{user_id}/resume.pdf | Current active resume PDF |
 
 Access: authenticated users only, own files only.
-
-**Tailored PDF rule:** Before uploading a new tailored PDF for a job — always check if `jobs.tailored_resume_url` is set for that job. If it is, delete the existing file from storage first, then upload the new one.
 
 ---
 
@@ -307,7 +294,7 @@ Access: authenticated users only, own files only.
 - Protected routes: /dashboard, /profile, /find-jobs, /find-jobs/[id]
 - Public routes: /, /login
 - Middleware in middleware.ts checks session on every protected route
-- On login: check profiles.is_complete → redirect to /profile if false, /dashboard if true
+- On login → redirect to /dashboard
 
 ---
 
@@ -353,68 +340,75 @@ export const createInsforgeServer = async () => {
 ## Browserbase Session Pattern
 
 ```typescript
-// Standard session for URL fetch
+// Company research session — single session, sequential page visits
 const session = await bb.sessions.create({
   projectId: process.env.BROWSERBASE_PROJECT_ID!,
+  timeout: 120, // 2 minute session — visits 3-4 pages max
 });
-
-// LinkedIn session — uses saved context
-const session = await bb.sessions.create({
-  projectId: process.env.BROWSERBASE_PROJECT_ID!,
-  browserSettings: {
-    context: {
-      id: profile.linkedin_context_id,
-      persist: true, // keeps cookies fresh after each run
-    },
-  },
-  timeout: 600, // 10 minute session for LinkedIn browsing
-});
-
-// LinkedIn Context creation (connect flow)
-const context = await bb.contexts.create({
-  projectId: process.env.BROWSERBASE_PROJECT_ID!,
-});
-const session = await bb.sessions.create({
-  projectId: process.env.BROWSERBASE_PROJECT_ID!,
-  browserSettings: { context: { id: context.id, persist: true } },
-});
-const { debuggerFullscreenUrl } = await bb.sessions.debug(session.id);
-// Return debuggerFullscreenUrl — opens in new tab for user to log in
 ```
 
 ---
 
 ## Job Discovery Pattern
 
-**Method 1 — LinkedIn (automated, requires connected account)**
+**Adzuna API — job search**
 
 ```typescript
-// Check connection before starting
-if (!profile.linkedin_connected || !profile.linkedin_context_id) {
-  return { error: "Connect LinkedIn before finding jobs" };
-}
-
-// Auth check after navigation
-await page.goto(
-  `https://www.linkedin.com/jobs/search/?keywords=...&location=...`,
+const response = await fetch(
+  `https://api.adzuna.com/v1/api/jobs/us/search/1?` +
+    `app_id=${process.env.ADZUNA_APP_ID}&` +
+    `app_key=${process.env.ADZUNA_APP_KEY}&` +
+    `what=${encodeURIComponent(jobTitle)}&` +
+    `where=${encodeURIComponent(location)}&` +
+    `category=it-jobs&` +
+    `results_per_page=10&` +
+    `content-type=application/json`,
 );
-if (page.url().includes("login") || page.url().includes("authwall")) {
-  return { error: "LinkedIn session expired. Please reconnect." };
-}
-
-// Dual extraction — DOM + Stagehand merged
-const domJobs = await extractDomLinkedInJobs(page); // no LLM
-const llmJobs = await stagehand.extract({ schema }); // with LLM
-const merged = mergeJobs(domJobs, llmJobs); // deduplicate by title|company|location
+const data = await response.json();
+// data.results — array of job listings
+// Each job: title, company.display_name, location.display_name,
+//           salary_min, salary_max, description, redirect_url, created
 ```
 
-**Method 2 — URL input (manual, any platform)**
+---
+
+## Company Research Pattern
 
 ```typescript
-const response = await bb.fetchAPI.create({ url: jobUrl });
-// GPT-4o extracts structured job data from response.content
-// GPT-4o scores against user profile
-// Saved with source: 'url', run_id: null
+// Single session — visits company homepage and sub pages sequentially
+const stagehand = new Stagehand({
+  env: "BROWSERBASE",
+  apiKey: process.env.BROWSERBASE_API_KEY!,
+  projectId: process.env.BROWSERBASE_PROJECT_ID!,
+  browserbaseSessionID: session.id,
+  modelName: "gpt-4o",
+  modelClientOptions: { apiKey: process.env.OPENAI_API_KEY! },
+});
+
+await stagehand.init();
+const page = stagehand.page;
+
+// Clean company name and construct homepage URL
+const cleanName = companyName
+  .replace(/\s*(Inc\.?|LLC|Ltd\.?|Corp\.?|Co\.?).*$/i, "")
+  .trim()
+  .toLowerCase()
+  .replace(/\s+/g, "");
+
+const homepageUrl = `https://www.${cleanName}.com`;
+
+// Navigate and extract — graceful fallback if page not found
+try {
+  await page.goto(homepageUrl);
+  await page.waitForLoadState("networkidle");
+  const content = await stagehand.extract({ instruction: "..." });
+} catch (error) {
+  // Log and continue — GPT-4o will synthesize from what was found
+  await logAgentError(jobId, error);
+}
+
+// Always close session when done
+await stagehand.close();
 ```
 
 ---
@@ -429,8 +423,8 @@ Rules the AI agent must never violate:
 - All InsForge server-side writes use `createInsforgeServer()` — never the browser client.
 - No hardcoded hex values or raw Tailwind color classes in components — use CSS variables from ui-tokens.md.
 - Every Stagehand action is wrapped in try/catch. Failures are logged to agent_logs, never thrown to crash the run.
-- `profiles` table is never modified by resume tailoring. Tailoring only writes to `jobs.tailored_resume_url` and `jobs.tailored_match_score`.
-- Before uploading a new tailored PDF — always delete the existing tailored PDF for that job from InsForge Storage first.
-- `run_id` is null on jobs created from URL input — always handle this null case.
-- LinkedIn context is only used when `profiles.linkedin_connected` is true AND `profiles.linkedin_context_id` is not null — always check both before creating a session.
+- Company research always returns a dossier — even if browser research fails, GPT-4o synthesizes from company name and job description alone. Never return empty.
+- Browserbase sessions are always closed with stagehand.close() when done — never leave sessions open.
 - Always scope InsForge queries to the current user_id — never query without a user filter.
+- Adzuna API always includes category=it-jobs — never search without this filter.
+- jobs.source is always 'search' or 'url' — never any other value.

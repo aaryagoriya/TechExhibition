@@ -2,7 +2,6 @@ export const dynamic = "force-dynamic";
 
 import { PostHogIdentify } from "@/components/analytics/PostHogIdentify";
 import { Navbar } from "@/components/layout/Navbar";
-import { ConnectedAccounts } from "@/components/profile/ConnectedAccounts";
 import { ProfileAttentionBanner } from "@/components/profile/ProfileAttentionBanner";
 import { ProfilePageClient } from "@/components/profile/ProfilePageClient";
 import { requireUser } from "@/lib/auth";
@@ -35,15 +34,11 @@ export default async function ProfilePage() {
   return (
     <>
       <PostHogIdentify userId={user.id} />
-      <Navbar />
+      <Navbar isAuthenticated />
       <main className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-[1440px] flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
         <ProfileAttentionBanner
           completionPercent={completionPercent}
           missingFields={missingFields}
-        />
-        <ConnectedAccounts
-          linkedinConnected={profile?.linkedin_connected ?? false}
-          linkedinContextId={profile?.linkedin_context_id ?? null}
         />
         <ProfilePageClient profile={profile ?? null} />
       </main>
