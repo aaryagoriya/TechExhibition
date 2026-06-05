@@ -1,3 +1,14 @@
+export type MissingField =
+  | "FULL NAME"
+  | "PHONE"
+  | "LOCATION"
+  | "JOB TITLE"
+  | "EXPERIENCE LEVEL"
+  | "YEARS EXP"
+  | "SKILLS"
+  | "WORK EXPERIENCE"
+  | "EDUCATION";
+
 export interface Profile {
   id: string;
   full_name: string | null;

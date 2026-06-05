@@ -135,12 +135,17 @@ Extract from Resume button — GPT-4o reads uploaded PDF and auto-fills profile 
 
 ### 08 Resume PDF Generation from Profile
 
-Generate a clean generic PDF resume from current profile data.
+Generate a clean professional PDF resume from current profile data 
+using GPT-4o.
 
 **Logic:**
 
 - POST /api/resume/generate
 - Reads current profile data from profiles table
+- GPT-4o generates professional resume content:
+  - Professional summary paragraph
+  - Polished work experience bullet points
+  - Clean professional language throughout
 - @react-pdf/renderer renders clean single-page PDF from profile fields
 - renderToBuffer() used — never write to disk
 - Buffer uploaded to InsForge Storage at resumes/{user_id}/resume.pdf with upsert: true

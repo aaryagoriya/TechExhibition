@@ -7,6 +7,24 @@
       "skillPath": "skills/architect/SKILL.md",
       "computedHash": "62908472db7bd81004ab9abe0810bac166cee1b6e08aaf5793175bb90c4916f7"
     },
+    "browser": {
+      "source": "browserbase/skills",
+      "sourceType": "github",
+      "skillPath": "skills/browser/SKILL.md",
+      "computedHash": "cdebd63e89139c9275a0d8d317f3dd63067166cc16378505209963a7582ebaed"
+    },
+    "fetch": {
+      "source": "browserbase/skills",
+      "sourceType": "github",
+      "skillPath": "skills/fetch/SKILL.md",
+      "computedHash": "b9687cae8c2daf889b3b5c1ef8282822acdf27de49118f25917011ed0dd1799a"
+    },
+    "functions": {
+      "source": "browserbase/skills",
+      "sourceType": "github",
+      "skillPath": "skills/functions/SKILL.md",
+      "computedHash": "ecfc0370b78f7739a4e18ddab247bf69e18369d3a8b6aa95c46948ba217b0530"
+    },
     "imprint": {
       "source": "JavaScript-Mastery-Pro/skills",
       "sourceType": "github",
