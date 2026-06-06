@@ -14,7 +14,6 @@
 <img src="https://img.shields.io/badge/-OpenAI%20GPT--4o-412991?style=for-the-badge&logo=OpenAI&logoColor=white" />
 <img src="https://img.shields.io/badge/-Stagehand-orange?style=for-the-badge" />
 <img src="https://img.shields.io/badge/-Browserbase-000000?style=for-the-badge" />
-<img src="https://img.shields.io/badge/-AgentSpan-blueviolet?style=for-the-badge" />
 <img src="https://img.shields.io/badge/-InsForge-darkgreen?style=for-the-badge" />
 
   </div>
@@ -57,12 +56,11 @@ If you're getting started and need assistance or face any bugs, join our active 
 
 - **[Next.js](https://nextjs.org/)** is a full-stack React framework that powers JobPilot's user interface, utilizing the App Router, Server Actions, and API Routes to deliver server-rendered components and high-performance client-side navigation.
 - **[TypeScript](https://www.typescriptlang.org/)** is a strongly typed programming language that builds on JavaScript, ensuring strict type safety across the entire codebase and providing a maintainable environment for complex agent orchestration.
-- **[Tailwind CSS v3.4](https://tailwindcss.com/)** is a utility-first CSS framework used for rapid UI development, providing a clean, responsive, and easily customized styling infrastructure.
+- **[Tailwind v4](https://tailwindcss.com/)** is a utility-first CSS framework used for rapid UI development, providing a clean, responsive, and easily customized styling infrastructure.
 - **[shadcn/ui](https://ui.shadcn.com/)** is a collection of re-usable UI components built using Radix Primitives and Tailwind CSS, serving as the design system for the app's dashboard, tables, and job inventory views.
 - **[OpenAI GPT-4o](https://openai.com/)** is a highly capable multimodal AI model that serves as the core intelligence engine, parsing job descriptions to compute match scores, tailoring resumes, and driving the form-filling automation logic.
 - **[Stagehand](https://github.com/browserbase/stagehand)** is an AI-driven browser agent built on top of Playwright that uses LLMs to interpret page elements dynamically, allowing JobPilot to execute LinkedIn Easy Apply paths and handle external ATS form-filling.
 - **[Browserbase](https://www.browserbase.com/)** is a headless cloud browser platform that manages infrastructure, session persistence, authentication states, and CAPTCHA solving so background jobs can run through realistic browser instances.
-- **[AgentSpan](https://www.agentspan.com/)** is a framework for durable agent orchestration and observability, providing execution reliability, error-recovery mechanisms, and idempotency across multi-step application tasks.
 - **[InsForge](https://insforge.com/)** is a comprehensive backend-as-a-service provider that supplies the relational PostgreSQL database to manage the job inventory, handles user authentication, and provides secure file storage for assets.
 - **[PostHog](https://posthog.com/)** is an all-in-one product analytics platform used to track user engagement, system performance metrics, and the success rates of automated application paths.
 
@@ -134,7 +132,7 @@ ADZUNA_APP_ID=
 ADZUNA_APP_KEY=
 ```
 
-Replace the placeholder values with your real credentials. You can get these by signing up at: [**InsForge**](https://insforge.dev/), [**Browserbase**](https://www.browserbase.com/), [**OpenAI**](https://platform.openai.com/), [**Agentspan**](https://agentspan.ai/), [**PostHog**](https://posthog.com/), [**Adzuna**](https://www.adzuna.com/)
+Replace the placeholder values with your real credentials. You can get these by signing up at: [**InsForge**](https://insforge.dev/), [**Browserbase**](https://www.browserbase.com/), [**OpenAI**](https://platform.openai.com/), [**PostHog**](https://posthog.com/), [**Adzuna**](https://www.adzuna.com/)
 **Running the Project**
 
 ```bash
@@ -153,7 +151,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser to view the 
 
 **Browserbase Integration**
 
-See [BROWSERBASE_REPORT.md](BROWSERBASE_REPORT.md) for a detailed report on how Browserbase and Stagehand are used in this project, including the full history of the apply automation experiments and the current project state.
+See BROWSERBASE_REPORT.md for a detailed report on how Browserbase and Stagehand are used in this project, including the full history of the apply automation experiments and the current project state.
 
 **Deploy on Vercel**
 
