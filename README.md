@@ -1,6 +1,6 @@
 <div align="center">
   <br />
-    <a href="https://youtu.be/9dKA2hq4vf0" target="_blank">
+    <a href="" target="_blank">
       <img src="public/readme/readme-hero.webp" alt="Project Banner">
     </a>
   <br />
@@ -25,7 +25,7 @@
      Build this project step by step with our detailed tutorial on <a href="https://www.youtube.com/watch?v=XUkNR-JfHwo" target="_blank"><b>JavaScript Mastery</b></a> YouTube. Join the JSM family!
     </div>
 </div>
-
+ 
 ## 📋 <a name="table">Table of Contents</a>
 
 1. ✨ [Introduction](#introduction)
