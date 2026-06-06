@@ -1,6 +1,6 @@
 <div align="center">
   <br />
-    <a href="" target="_blank">
+    <a href="https://youtu.be/9dKA2hq4vf0" target="_blank">
       <img src="public/readme/readme-hero.webp" alt="Project Banner">
     </a>
   <br />
@@ -41,7 +41,7 @@ This repository contains the code corresponding to an in-depth tutorial availabl
 
 If you prefer visual learning, this is the perfect resource for you. Follow our tutorial to learn how to build projects like these step-by-step in a beginner-friendly manner!
 
-<a href="" target="_blank"><img src="https://github.com/sujatagunale/EasyRead/assets/151519281/1736fca5-a031-4854-8c09-bc110e3bc16d" /></a>
+<a href="https://youtu.be/9dKA2hq4vf0" target="_blank"><img src="https://github.com/sujatagunale/EasyRead/assets/151519281/1736fca5-a031-4854-8c09-bc110e3bc16d" /></a>
 
 ## <a name="introduction">✨ Introduction</a>
 
@@ -119,34 +119,22 @@ npm install
 Create a new file named `.env` in the root of your project and add the following content:
 
 ```env
-# InsForge (backend database + auth)
-NEXT_PUBLIC_INSFORGE_URL=https://your-app.region.insforge.app
-NEXT_PUBLIC_INSFORGE_ANON_KEY=your-insforge-anon-key
-INSFORGE_SERVICE_ROLE_KEY=your-insforge-service-role-key
+NEXT_PUBLIC_INSFORGE_URL=https://9zb7h4wq.us-east.insforge.app
+NEXT_PUBLIC_INSFORGE_ANON_KEY=
 
-# Browserbase
-BROWSERBASE_API_KEY=your-browserbase-api-key
-BROWSERBASE_PROJECT_ID=your-browserbase-project-id
+NEXT_PUBLIC_POSTHOG_KEY=
+NEXT_PUBLIC_POSTHOG_HOST=https://eu.i.posthog.com
 
-# Optional: enable Browserbase advanced stealth mode
-# BROWSERBASE_ADVANCED_STEALTH=true
+OPENAI_API_KEY=
 
-# OpenAI
-OPENAI_API_KEY=your-openai-api-key
+BROWSERBASE_API_KEY=
+BROWSERBASE_PROJECT_ID=
 
-# AgentSpan (durable agent orchestration)
-AGENTSPAN_API_KEY=your-agentspan-api-key
-
-# App URL (used for OAuth callback and AgentSpan webhooks)
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-
-# Optional: PostHog analytics
-# NEXT_PUBLIC_POSTHOG_KEY=your-posthog-key
-# NEXT_PUBLIC_POSTHOG_HOST=https://app.posthog.com
+ADZUNA_APP_ID=
+ADZUNA_APP_KEY=
 ```
 
-Replace the placeholder values with your real credentials. You can get these by signing up at: [**InsForge**](https://insforge.dev/), [**Browserbase**](https://www.browserbase.com/), [**OpenAI**](https://platform.openai.com/), [**Agentspan**](https://agentspan.ai/), [**PostHog**](hhttps://posthog.com/).
-
+Replace the placeholder values with your real credentials. You can get these by signing up at: [**InsForge**](https://insforge.dev/), [**Browserbase**](https://www.browserbase.com/), [**OpenAI**](https://platform.openai.com/), [**Agentspan**](https://agentspan.ai/), [**PostHog**](https://posthog.com/), [**Adzuna**](https://www.adzuna.com/)
 **Running the Project**
 
 ```bash
