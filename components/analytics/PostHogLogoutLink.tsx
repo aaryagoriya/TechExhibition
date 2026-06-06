@@ -14,6 +14,7 @@ export function PostHogLogoutLink({ children, className }: Props) {
   return (
     <Link
       href="/api/auth/logout"
+      prefetch={false}
       className={className}
       onClick={() => {
         resetPostHogUser();
